@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agents-backend"
+version = "0.1.0"
+description = "LangGraph based OpenAI compatible API with local monitoring"
+readme = "README.md"
+requires-python = ">=3.14"
+authors = [
+    { name = "Anja", email = "anja@example.com" }
+]
+dependencies = [
+    "langgraph",
+    "langchain",
+    "langchain-openai",
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "langfuse",
+    "python-dotenv",
+    "anyio",
+    "typing-extensions",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+    "mypy",
+    "black",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+select = ["E", "F", "I", "N", "UP"]
+ignore = []
+
+[tool.black]
+line-length = 88
+target-version = ['py314']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
