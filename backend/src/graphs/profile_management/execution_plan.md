@@ -1,9 +1,9 @@
 # Execution Plan: Profile Management Graph
 
 ## Phase 1: Infrastructure & Setup
-- [ ] Create directory structure (`nodes/`, `prompts/`)
-- [ ] Analyze `nextcloud_mcp.json` for tool mapping
-- [ ] Define `ProfileManagementState` in `src/graphs/profile_management/state.py` (extending `MultiAgentState`)
+- [x] Create directory structure (`nodes/`, `prompts/`)
+- [x] Analyze `nextcloud_mcp.json` for tool mapping
+- [x] Define `ProfileManagementState` in `src/graphs/profile_management/state.py` (extending `MultiAgentState`)
 
 ## Phase 2: Component Implementation
 - [ ] **Orchestrator**
