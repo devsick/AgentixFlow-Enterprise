@@ -15,7 +15,11 @@
             "name": "oogabooga",
             "url": "http://oogabooga:5000/v1",
             "model": "gemma-4-26B-A4B-it-UD-Q3_K_XL.gguf",
-            "api_key": "sk-5jfi5kf5k43byowfo561saxnctzh"
+            "api_key": "sk-5jfi5kf5k43byowfo561saxnctzh",
+            "extra_body": {
+                "enable_thinking": true,
+                "reasoning_effort": "high"
+            }
         }
     }
 }

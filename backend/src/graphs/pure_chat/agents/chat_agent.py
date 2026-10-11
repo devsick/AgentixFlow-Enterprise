@@ -1,3 +1,4 @@
+from src.shared.reasoning_chat_openai import ReasoningChatOpenAI
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from src.settings.config_store import config_store
@@ -12,13 +13,23 @@ class ChatAgent:
         # Nutze den übergebenen API Key oder den aus der Config
         effective_api_key = api_key or profile.get("api_key", "sk-no-key-provided")
 
-        # Initialisiere das LLM mit den Settings aus der config.json
-        self.llm = ChatOpenAI(
-            base_url=profile["url"],
-            model=profile["model"],
+        # Entscheide, welche Klasse zu verwenden ist basierend auf dem Profil-Typ
+        if profile.type == "reasoning":
+            LLMClass = ReasoningChatOpenAI
+        else:
+            LLMClass = ChatOpenAI
+
+        # Initialisiere das LLM
+        # Wir verwenden nun direkt das extra_body aus dem Profil für maximale Flexibilität
+        self.llm = LLMClass(
+            base_url=profile.url,
+            model=profile.model,
             api_key=effective_api_key,
             temperature=0.7,
-            streaming=True  # Zwingend für das Streaming von Content und Thinking
+            streaming=True,
+            stream_usage=True,
+            use_responses_api=False,
+            extra_body=profile.extra_body
         )
         self.system_prompt = ""
 
@@ -27,13 +38,12 @@ class ChatAgent:
         self.llm.api_key = api_key
 
     async def set_system_prompt(self, prompt_text: str):
+        """Setzt den System Prompt."""
         self.system_prompt = prompt_text
 
     async def run(self, messages: list):
         """
         Führt den LLM-Aufruf asynchron aus. 
-        Der Aufruf erfolgt über das LLM-Objekt selbst, um via astream_events 
-        die Granularität für Content, Reasoning und Tool-Calls zu erhalten.
         """
         full_messages = []
         if self.system_prompt:

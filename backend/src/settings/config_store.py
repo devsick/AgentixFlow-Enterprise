@@ -47,7 +47,7 @@ class ConfigStore:
 
         # Access all values:
         print(config_store.mcp_server)       # dict with MCP server configs
-        print(config_store.llm_profiles)     # dict with LLM profiles
+        print(config_store.llm_profiles)     # dict with LLM profile configs
         print(config_store.settings)         # full ConfigModel with settings
 
         # Access specific values:
@@ -83,20 +83,32 @@ class ConfigStore:
         return f"ConfigStore({self._data})"
 
 
-class ConfigDictWrapper:
+class ConfigDictWrapper(dict):
     """Wrapper that provides dictionary access and attribute access for config values."""
 
     def __init__(self, data: dict[str, Any]) -> None:
-        self._data = data
+        super().__init__(data)
 
     def __getitem__(self, key: str) -> Any:
-        return self._data[key]
+        val = super().__getitem__(key)
+        if isinstance(val, dict):
+            return ConfigDictWrapper(val)
+        return val
 
     def get(self, key: str, default: Any = None) -> Any:
-        return self._data.get(key, default)
+        val = super().get(key, default)
+        if isinstance(val, dict):
+            return ConfigDictWrapper(val)
+        return val
+
+    def __getattr__(self, name: str) -> Any:
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(f"'ConfigDictWrapper' object has no attribute '{name}'")
 
     def __repr__(self) -> str:
-        return f"ConfigDictWrapper({self._data})"
+        return f"ConfigDictWrapper({super().__repr__()})"
 
 
 # Create the global config_store instance

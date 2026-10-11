@@ -1,10 +1,4 @@
-"""
-config_model.py – Data models for the settings configuration.
-
-Provides Pydantic models that represent the structure of the
-settings configuration stored in src/config/config.json.
-"""
-
+from typing import Optional, Any, Dict
 from pydantic import BaseModel, Field
 
 
@@ -25,9 +19,10 @@ class LlmProfileConfig(BaseModel):
     name: str = Field(..., description="Profile name")
     url: str = Field(..., description="LLM server URL")
     model: str = Field(..., description="Model identifier")
+    extra_body: Dict[str, Any] = Field(default_factory=dict, description="Additional parameters for the LLM provider")
 
     def __repr__(self) -> str:
-        return f"LlmProfileConfig(type={self.type}, name={self.name}, url={self.url}, model={self.model})"
+        return f"LlmProfileConfig(type={self.type}, name={self.name}, url={self.url}, model={self.model}, extra_body={self.extra_body})"
 
 
 class ConfigModel(BaseModel):
