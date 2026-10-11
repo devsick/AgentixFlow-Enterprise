@@ -2,7 +2,7 @@
 config_store.py – Configuration store that loads from config.json.
 
 Loads the settings from:
-    /app/server/storage/anythingllm-fs/repos/agents/backend/src/config/config.json
+    src/config/config.json
 
 Provides access to the loaded configuration via:
     - config_store.mcp_server: dictionary of MCP server configs
@@ -26,9 +26,7 @@ from pathlib import Path
 from typing import Any
 
 # Path to the config file
-CONFIG_FILE = Path(
-    "/app/server/storage/anythingllm-fs/repos/agents/backend/src/config/config.json"
-)
+CONFIG_FILE = Path(__file__).resolve().parent.parent / "config" / "config.json"
 
 
 def load_config() -> dict[str, Any]:
@@ -93,6 +91,9 @@ class ConfigDictWrapper:
 
     def __getitem__(self, key: str) -> Any:
         return self._data[key]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._data.get(key, default)
 
     def __repr__(self) -> str:
         return f"ConfigDictWrapper({self._data})"

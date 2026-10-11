@@ -22,6 +22,7 @@ dependencies = [
     "python-dotenv",
     "anyio",
     "typing-extensions",
+    "aiofiles",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +32,9 @@ dev = [
     "mypy",
     "black",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
 [tool.ruff]
 line-length = 88

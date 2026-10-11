@@ -1,0 +1,27 @@
+services:
+  flow-agent-api:
+    image: flow-agent-api:0.1  
+    container_name: flow-agent-api
+    restart: unless-stopped
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8090:8090"
+    networks:
+      - proxy_net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./monitoring_runs:/app/monitoring_runs:Z 
+
+networks:
+  proxy_net:
+    external: true
+    name: proxy_net
+
+
+x-podman:
+  in_pod: local
+  pod_args:
+    - "--share=net"

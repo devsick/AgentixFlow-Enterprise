@@ -2,7 +2,7 @@
 config_model.py – Data models for the settings configuration.
 
 Provides Pydantic models that represent the structure of the
-settings configuration stored in /app/server/storage/anythingllm-fs/repos/agents/backend/src/config/config.json.
+settings configuration stored in src/config/config.json.
 """
 
 from pydantic import BaseModel, Field
@@ -34,7 +34,7 @@ class ConfigModel(BaseModel):
     """Top-level settings configuration model.
 
     Mirrors the structure found in:
-        /app/server/storage/anythingllm-fs/repos/agents/backend/src/config/config.json
+        src/config/config.json
     """
 
     class Settings(BaseModel):
