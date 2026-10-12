@@ -4,6 +4,7 @@ from src.graphs.profile_management.nodes.mcp_initializer_node import initialize_
 from src.graphs.profile_management.nodes.orchestrator_agent_node import OrchestratorAgentNode
 from src.graphs.profile_management.nodes.router_node import RouterNode
 from src.graphs.profile_management.nodes.detect_collective_agent_node import DetectCollectiveAgentNode
+from src.graphs.profile_management.nodes.load_documents_agent_node import LoadDocumentsAgentNode
 
 def create_profile_management_graph():
     workflow = StateGraph(ProfileManagementState)
@@ -22,6 +23,9 @@ def create_profile_management_graph():
     detect_collective = DetectCollectiveAgentNode()
     workflow.add_node("detect_collective", detect_collective)
 
+    load_documents = LoadDocumentsAgentNode()
+    workflow.add_node("load_documents", load_documents)
+
     # 2. Define Edges
     # Start -> Initialize MCP
     workflow.set_entry_point("initialize_mcp")
@@ -38,6 +42,8 @@ def create_profile_management_graph():
         signal = state.get("metadata", {}).get("routing_signal", "none")
         if signal == "detect_collective":
             return "detect_collective"
+        elif signal == "load_documents":
+            return "load_documents"
         elif signal == "end" or signal == "unimplemented":
             return "end"
         else:
@@ -54,6 +60,9 @@ def create_profile_management_graph():
 
     # Agent Node -> Router (to decide next step)
     workflow.add_edge("detect_collective", "router")
+    
+    # detect_collective -> load_documents
+    workflow.add_edge("detect_collective", "load_documents")
 
     return workflow.compile()
 
