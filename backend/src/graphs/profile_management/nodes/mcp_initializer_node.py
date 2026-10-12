@@ -1,0 +1,33 @@
+from typing import Any, Dict
+
+from src.tools.nextcloud_mcp_client import NextcloudMCPClient
+
+
+# Global allowlist: maximum permissions for all agents.
+BASELINE_TOOLS = [
+    "collectives_get_collectives",
+    "collectives_get_pages",
+    "collectives_get_page",
+    "collectives_search_pages",
+    "nc_webdav_list_directory",
+    "nc_webdav_read_file",
+    "nc_webdav_write_file",
+    "nc_webdav_create_directory",
+    "nc_webdav_search_files",
+    "nc_webdav_find_by_name",
+]
+
+
+async def initialize_mcp_node(state: Any) -> Dict[str, Any]:
+    """
+    Initializes the MCP client with the global allowlist.
+    The client is stored in the LangGraph state.
+    """
+
+    client = NextcloudMCPClient(
+        allowed_tools=BASELINE_TOOLS
+    )
+
+    return {
+        "mcp_client": client,
+    }

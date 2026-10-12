@@ -162,13 +162,29 @@ async def stream_generator(
             yield f"data: {chunk_obj.model_dump_json()}\n\n"
 
         # 2. Handle Tool Calls
-        elif event["event"] == "on_tool_call":
+        elif event["event"] == "on_tool_start":
+            tool_data = {
+                "name": event.get("name"),
+                "input": event["data"].get("input", {})
+            }
+
             await monitoring_writer.log_event(
-                graph_id, 
-                run_id, 
-                "tool_call", 
-                {"tool_call": event["data"].get("tool_call")}
+                graph_id, run_id, "tool_start", tool_data
             )
+
+            yield f"data: {json.dumps({'type': 'tool_start', **tool_data}, default=str)}\n\n"
+
+        elif event["event"] == "on_tool_end":
+            tool_data = {
+                "name": event.get("name"),
+                "output": str(event["data"].get("output", ""))
+            }
+
+            await monitoring_writer.log_event(
+                graph_id, run_id, "tool_end", tool_data
+            )
+
+            yield f"data: {json.dumps({'type': 'tool_end', **tool_data}, default=str)}\n\n"
 
         # 3. Handle LLM End (Final Response)
         elif event["event"] == "on_chat_model_end":

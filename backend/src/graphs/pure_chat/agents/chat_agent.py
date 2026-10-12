@@ -49,6 +49,6 @@ class ChatAgent:
         if self.system_prompt:
             full_messages.append(SystemMessage(content=self.system_prompt))
         full_messages.extend(messages)
-        
+
         result = await self.llm.ainvoke(full_messages)
         return result

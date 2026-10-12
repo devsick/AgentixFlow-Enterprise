@@ -1,56 +1,109 @@
 from typing import Any, Dict
-from langchain_core.messages import BaseMessage
+
+from langchain_core.messages import AIMessage, HumanMessage
+
 from src.graphs.profile_management.state import ProfileManagementState
+from src.graphs.profile_management.agents.detect_collective_agent.detect_collective_agent import (
+    DetectCollectiveAgent,
+)
+
 
 class DetectCollectiveAgentNode:
     """
-    Agent, der das Ziel-Collective identifiziert, prüft und ggf. anlegt.
-    Nutzt ausschließlich Collective-Tools.
+    Identifies the target collective and writes the result
+    into the graph state.
     """
 
     def __init__(self, prompt_path: str):
-        with open(prompt_path, 'r', encoding='utf-8') as f:
-            self.system_prompt = f.read()
+        self.agent = DetectCollectiveAgent(prompt_path)
 
-    async def __call__(self, state: ProfileManagementState) -> Dict[str, Any]:
-        # In der realen Implementierung wird hier der LLM-Call mit dem strikten Prompt 
-        # und dem JSON-Schema erfolgen.
-        
-        # Der Agent benötigt den 'collective_name' aus dem State (den der Orchestrator gesetzt hat).
-        # Falls er fehlt, kann er aus der letzten User-Message versuchen, ihn zu extrahieren.
-        
-        # Hier simulieren wir den Prozess für den ersten Testlauf:
-        # Wir nehmen an, der Orchestrator hat den Namen bereits im State unter 'collective' 
-        # oder wir nehmen den Namen aus den Parametern.
-        
-        # In diesem Beispiel simulieren wir das Ergebnis eines erfolgreichen Tool-Calls.
-        # Wir geben das Ergebnis im gewünschten Format zurück.
-        
-        # Wir extrahieren (simuliert) den Namen aus dem State oder der Nachricht
-        # Im echten Fall würde der Agent via Tool-Call arbeiten.
-        
-        # Wir nehmen an, wir haben bereits den Namen aus dem State erhalten.
-        # Falls nicht, suchen wir in den Parametern.
-        
-        target_name = "Default_Collective"
-        # (Simulation: Wir nehmen einfach einen Wert, um die Struktur zu testen)
-        
-        # Das Ergebnis muss exakt dem Schema entsprechen:
-        # { "name": str, "id": str, "exists": bool, "created": bool }
-        
-        simulated_result = {
-            "collective": {
-                "name": target_name,
-                "id": "nc-12345-abcde",
-                "exists": True,
-                "created": False
+    async def __call__(
+        self,
+        state: ProfileManagementState,
+    ) -> Dict[str, Any]:
+
+        # Find the most recent user message.
+        last_message = next(
+            (
+                message.content
+                for message in reversed(state["messages"])
+                if isinstance(message, HumanMessage)
+            ),
+            None,
+        )
+
+        if last_message is None:
+            return {
+                "metadata": {
+                    **state.get("metadata", {}),
+                    "error": "No user message found.",
+                },
+                "messages": [
+                    AIMessage(
+                        content="Error: No user message found."
+                    )
+                ],
             }
+
+        # Retrieve the MCP client from the shared graph state.
+        client = state.get("mcp_client")
+
+        try:
+            result = await self.agent.run(
+                last_message=last_message,
+                mcp_client=client,
+            )
+
+            collective_data = result["data"]
+            usage = result["usage"]
+
+        except Exception as exc:
+            return {
+                "metadata": {
+                    **state.get("metadata", {}),
+                    "error": f"DetectCollective failed: {exc}",
+                },
+                "messages": [
+                    AIMessage(
+                        content=(
+                            "Error identifying the collective: "
+                            f"{exc}"
+                        )
+                    )
+                ],
+            }
+
+        new_collective = {
+            "name": collective_data.get("name"),
+            "id": collective_data.get("id"),
+            "exists": collective_data.get("exists", False),
+            "created": collective_data.get("created", False),
         }
-        
+
+        if new_collective["created"]:
+            status_text = (
+                f"A new collective '{new_collective['name']}' "
+                "has been successfully created."
+            )
+        elif new_collective["exists"]:
+            status_text = (
+                f"Collective '{new_collective['name']}' was found."
+            )
+        elif not new_collective["id"]:
+            status_text = (
+                "Error: The collective could not be identified."
+            )
+        else:
+            status_text = "Collective identified."
+
         return {
-            **simulated_result,
+            "collective": new_collective,
+            "messages": [
+                AIMessage(content=status_text)
+            ],
+            "total_tokens": usage.get("total_tokens", 0),
             "metadata": {
                 **state.get("metadata", {}),
-                "agent": "detect_collective"
-            }
+                "agent": "detect_collective",
+            },
         }
