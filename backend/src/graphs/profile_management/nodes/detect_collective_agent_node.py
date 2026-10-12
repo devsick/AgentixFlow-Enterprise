@@ -14,8 +14,8 @@ class DetectCollectiveAgentNode:
     into the graph state.
     """
 
-    def __init__(self, prompt_path: str):
-        self.agent = DetectCollectiveAgent(prompt_path)
+    def __init__():
+        self.agent = DetectCollectiveAgent()
 
     async def __call__(
         self,

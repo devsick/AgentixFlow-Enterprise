@@ -13,13 +13,13 @@ def create_profile_management_graph():
     workflow.add_node("initialize_mcp", initialize_mcp_node)
     
     # Agent Nodes
-    orchestrator = OrchestratorAgentNode(prompt_path="/home/anja/Repos_Content/agents/backend/src/graphs/profile_management/prompts/orchestrator.txt")
+    orchestrator = OrchestratorAgentNode()
     workflow.add_node("orchestrator", orchestrator)
     
     router = RouterNode()
     workflow.add_node("router", router)
     
-    detect_collective = DetectCollectiveAgentNode(prompt_path="/home/anja/Repos_Content/agents/backend/src/graphs/profile_management/prompts/detect_collective.txt")
+    detect_collective = DetectCollectiveAgentNode()
     workflow.add_node("detect_collective", detect_collective)
 
     # 2. Define Edges

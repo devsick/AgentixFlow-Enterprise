@@ -12,6 +12,10 @@ from langchain_core.messages import (
 
 from src.settings.config_store import config_store
 from src.settings.reasoning_chat_openai import ReasoningChatOpenAI
+from pathlib import Path
+
+
+
 
 
 class DetectCollectiveAgent:
@@ -29,10 +33,15 @@ class DetectCollectiveAgent:
         "collectives_search_pages",
     ]
 
+    PROMPT_PATH = Path(__file__).with_name("detext_collective_systemprompt.md")
+
+    with PROMPT_PATH.open("r", encoding="utf-8") as f:
+        self.system_prompt = f.read()
+    
     MAX_TOOL_ROUNDS = 10
 
-    def __init__(self, prompt_path: str):
-        with open(prompt_path, "r", encoding="utf-8") as file:
+    def __init__(self):
+        with self.PROMPT_PATH.open("r", encoding="utf-8") as file:
             self.system_prompt = file.read()
 
         self._init_llm()

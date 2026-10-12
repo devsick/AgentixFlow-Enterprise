@@ -12,9 +12,9 @@ class OrchestratorAgentNode:
     # Liste der aktuell unterstützten Workflows
     IMPLEMENTED_INTENTS = ["create_master_profile"]
 
-    def __init__(self, prompt_path: str):
+    def __init__(self):
         # Die Agent-Instanz wird initialisiert. 
-        self.agent = OrchestratorAgent(prompt_path)
+        self.agent = OrchestratorAgent()
 
     async def __call__(self, state: ProfileManagementState) -> Dict[str, Any]:
         last_message = state["messages"][-1].content

@@ -8,6 +8,7 @@ from src.graphs.profile_management.state import ProfileManagementState
 from src.settings.config_store import config_store
 from src.settings.reasoning_chat_openai import ReasoningChatOpenAI
 from langchain_openai import ChatOpenAI
+from pathlib import Path
 
 
 class OrchestratorExtraction(BaseModel):
@@ -25,11 +26,13 @@ class OrchestratorAgent:
     The core logic of the orchestrator agent.
     """
 
-    def __init__(self, prompt_path: str):
-        with open(prompt_path, 'r', encoding='utf-8') as f:
-            self.system_prompt = f.read()
+    PROMPT_PATH = Path(__file__).with_name("orchestrator_agent_systemprompt.md")
 
-        # Initialisierung des LLM aus dem Profil 'oogabooga'
+    def __init__(self):
+
+        with self.PROMPT_PATH.open("r", encoding="utf-8") as file:
+            self.system_prompt = file.read()
+
         self._init_llm()
 
     def _init_llm(self):
