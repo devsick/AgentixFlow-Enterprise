@@ -24,6 +24,7 @@ dependencies = [
     "typing-extensions",
     "aiofiles",
     "mcp>=1.9",
+    "python-docx",
 ]
 
 [project.optional-dependencies]
