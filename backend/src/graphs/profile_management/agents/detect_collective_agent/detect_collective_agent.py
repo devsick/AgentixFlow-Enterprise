@@ -11,8 +11,9 @@ from langchain_core.messages import (
 )
 
 from src.settings.config_store import config_store
-from src.settings.reasoning_chat_openai import ReasoningChatOpenAI
+from src.shared.reasoning_chat_openai import ReasoningChatOpenAI
 from pathlib import Path
+
 
 
 
@@ -31,19 +32,17 @@ class DetectCollectiveAgent:
         "collectives_get_pages",
         "collectives_get_page",
         "collectives_search_pages",
+        "collectives_create_collective",
+        "collectives_create_page",
     ]
 
-    PROMPT_PATH = Path(__file__).with_name("detext_collective_systemprompt.md")
+    PROMPT_PATH = Path(__file__).with_name("detect_collective_systemprompt.md")
 
-    with PROMPT_PATH.open("r", encoding="utf-8") as f:
-        self.system_prompt = f.read()
-    
     MAX_TOOL_ROUNDS = 10
 
     def __init__(self):
-        with self.PROMPT_PATH.open("r", encoding="utf-8") as file:
-            self.system_prompt = file.read()
-
+        with self.PROMPT_PATH.open("r", encoding="utf-8") as f:
+            self.system_prompt = f.read()
         self._init_llm()
 
     def _init_llm(self) -> None:
@@ -140,16 +139,18 @@ class DetectCollectiveAgent:
         """
         Runs the agent and executes MCP tools requested by the LLM.
         """
-
+       
         if mcp_client is None:
             raise ValueError(
                 "MCP client is missing from the graph state."
             )
 
+        
         tools = await mcp_client.get_tools(
             allowed_names=self.ALLOWED_TOOLS
         )
 
+        
         tools_by_name = {
             tool.name: tool for tool in tools
         }
@@ -160,7 +161,7 @@ class DetectCollectiveAgent:
                 "for DetectCollectiveAgent."
             )
 
-        llm_with_tools = self.llm.bind_tools(tools)
+        llm_with_tools = self.llm.bind_tools(tools,tool_choice="required")
 
         messages = [
             SystemMessage(content=self.system_prompt),
@@ -176,11 +177,13 @@ class DetectCollectiveAgent:
         for _ in range(self.MAX_TOOL_ROUNDS):
             response = await llm_with_tools.ainvoke(messages)
 
+                        
             usage = self._extract_usage(response)
-
+             
             for key in total_usage:
                 total_usage[key] += usage[key]
 
+           
             # No tool calls means the model has returned its final answer.
             if not response.tool_calls:
                 content_dict = self._parse_json_content(

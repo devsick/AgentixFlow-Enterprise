@@ -4,6 +4,17 @@ from src.graphs.profile_management.state import ProfileManagementState
 from src.graphs.profile_management.agents.extract_questions.extract_questions_agent import (
     ExtractQuestionsAgent,
 )
+from src.shared.node_wrapper import observe_node
+
+class ExtractQuestionsAgentNode:
+    """
+    Node, der den ExtractQuestionsAgent aufruft und die Ergebnisse in den State schreibt.
+    """
+
+    def __init__(self):
+        self.agent = ExtractQuestionsAgent()
+
+
 
 
 class ExtractQuestionsAgentNode:
@@ -14,22 +25,7 @@ class ExtractQuestionsAgentNode:
     def __init__(self):
         self.agent = ExtractQuestionsAgent()
 
-from typing import Any, Dict
-from langchain_core.messages import AIMessage
-from src.graphs.profile_management.state import ProfileManagementState
-from src.graphs.profile_management.agents.extract_questions.extract_questions_agent import (
-    ExtractQuestionsAgent,
-)
-
-
-class ExtractQuestionsAgentNode:
-    """
-    Node, der den ExtractQuestionsAgent aufruft und die Ergebnisse in den State schreibt.
-    """
-
-    def __init__(self):
-        self.agent = ExtractQuestionsAgent()
-
+    @observe_node("extract_questions_agent_node")
     async def __call__(
         self,
         state: ProfileManagementState,

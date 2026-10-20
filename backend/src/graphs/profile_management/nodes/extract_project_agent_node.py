@@ -4,6 +4,7 @@ from src.graphs.profile_management.state import ProfileManagementState
 from src.graphs.profile_management.agents.extract_project.extract_project_agent import (
     ExtractProjectAgent,
 )
+from src.shared.node_wrapper import observe_node
 
 
 class ExtractProjectAgentNode:
@@ -14,6 +15,7 @@ class ExtractProjectAgentNode:
     def __init__(self):
         self.agent = ExtractProjectAgent()
 
+    @observe_node("extract_project_agent_node")
     async def __call__(
         self,
         state: ProfileManagementState,

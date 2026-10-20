@@ -3,12 +3,13 @@ import json
 import re
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage, BaseMessage
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from src.graphs.profile_management.state import ProfileManagementState
 from src.settings.config_store import config_store
-from src.settings.reasoning_chat_openai import ReasoningChatOpenAI
+from src.shared.reasoning_chat_openai import ReasoningChatOpenAI
 from langchain_openai import ChatOpenAI
 from pathlib import Path
+
 
 
 class OrchestratorExtraction(BaseModel):
@@ -32,6 +33,7 @@ class OrchestratorAgent:
 
         with self.PROMPT_PATH.open("r", encoding="utf-8") as file:
             self.system_prompt = file.read()
+        
 
         self._init_llm()
 

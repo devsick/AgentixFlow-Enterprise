@@ -13,7 +13,9 @@ def create_pure_chat_graph():
     chat_node = ChatNode()
 
     # Registriere den Node im Workflow
-    workflow.add_node("chat_node", chat_node)
+    workflow.add_node("chat_node", chat_node,metadata={
+        "streaming_mode": "live",
+    })
 
     # Definiere die Kanten (Edges)
     # In diesem simplen Graph: START -> chat_node -> END

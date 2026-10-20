@@ -19,6 +19,11 @@ class ProfileManagementState(TypedDict):
     graph_id: str
 
     # --- Profile Management Specific Fields ---
+     # --- Orchestrator / Workflow Routing ---
+    intent: str
+    collective_name: Optional[str]
+    file_paths: List[str]
+    
     # Information about the target collective
     collective: Dict[str, Any] # {"name": str, "id": str, "exists": bool, "created": bool}
     
@@ -61,6 +66,11 @@ class ProfileManagementState(TypedDict):
     # --- Profile Management Specific Fields ---
     # Information about the target collective
     collective: Dict[str, Any] # {"name": str, "id": str, "exists": bool, "created": bool}
+
+    # --- Orchestrator / Workflow Routing ---
+    intent: str
+    collective_name: Optional[str]
+    file_paths: List[Dict[str, Any]] 
     
     # Content/Entities
     collectives: List[Dict[str, Any]]

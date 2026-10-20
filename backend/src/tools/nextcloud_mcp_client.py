@@ -1,77 +1,130 @@
+
+from contextlib import AsyncExitStack
 from typing import Any, Dict, List, Optional, Type
 
-import httpx
 from pydantic import Field, create_model
 from langchain_core.tools import StructuredTool
+
+from mcp import ClientSession
+from mcp.client.streamable_http import streamable_http_client
+
 from src.settings.config_store import config_store
 
 
 class NextcloudMCPClient:
     """
-    Client for the Nextcloud MCP server.
+    MCP-Client für Nextcloud über Streamable HTTP.
 
-    Global allowlist:
-        Defines the maximum permissions for all agents.
-
-    Agent-specific allowlist:
-        Further restricts the tools available to an agent.
+    Der Client hält seine MCP-Session während seiner Lebensdauer offen.
+    Handshake, Session-ID, Protokollheader und Transport werden vom
+    offiziellen MCP-Python-SDK verwaltet.
     """
 
     def __init__(self, allowed_tools: List[str]):
-        self.server_config = config_store.settings.mcp_server.get(
-            "nextcloud-mcp"
-        )
+        self.server_config = config_store.mcp_server.get("nextcloud-mcp")
 
         if not self.server_config:
             raise ValueError(
-                "Could not find 'nextcloud-mcp' configuration "
-                "in config_store."
+                "Could not find 'nextcloud-mcp' configuration in config_store."
             )
 
-        self.url = self.server_config.url
+        self.url = self.server_config.url.rstrip("/")
         self.allowed_tools = frozenset(allowed_tools)
-        self.client = httpx.AsyncClient(base_url=self.url)
+
+        self._exit_stack: Optional[AsyncExitStack] = None
+        self._session: Optional[ClientSession] = None
+        self._connected = False
+
+    async def _ensure_connected(self) -> None:
+        """Öffnet den Transport und initialisiert die MCP-Session einmalig."""
+
+        if self._connected and self._session is not None:
+            return
+
+        stack = AsyncExitStack()
+
+        try:
+            await stack.__aenter__()
+
+            read_stream, write_stream = await stack.enter_async_context(
+                streamable_http_client(self.url)
+            )
+
+            session = ClientSession(read_stream, write_stream)
+            await stack.enter_async_context(session)
+
+            # MCP-Handshake; das SDK verwaltet die Protokollinitialisierung.
+            await session.initialize()
+
+            self._exit_stack = stack
+            self._session = session
+            self._connected = True
+
+            print(
+                f"[MCP] Connected to {self.url}",
+                flush=True,
+            )
+
+        except Exception:
+            await stack.aclose()
+            self._exit_stack = None
+            self._session = None
+            self._connected = False
+            raise
 
     async def _call_mcp_method(
         self,
         method: str,
         params: Dict[str, Any],
     ) -> Any:
-        """Executes a JSON-RPC request against the MCP server."""
+        """
+        Kompatibilitätsmethode für den bisherigen Client-Aufbau.
 
-        # Enforce global permissions for every tool execution.
+        Unterstützt tools/list und tools/call. Die MCP-Kommunikation selbst
+        erfolgt über ClientSession und nicht über selbst gebaute HTTP-POSTs.
+        """
+
+        await self._ensure_connected()
+
+        if self._session is None:
+            raise RuntimeError("MCP session was not initialized.")
+
+        if method == "tools/list":
+            result = await self._session.list_tools()
+
+            return {
+                "tools": [
+                    tool.model_dump(by_alias=True, mode="json")
+                    for tool in result.tools
+                ]
+            }
+
         if method == "tools/call":
             tool_name = params.get("name")
 
+            if not isinstance(tool_name, str):
+                raise ValueError("Missing MCP tool name.")
+
             if tool_name not in self.allowed_tools:
                 raise PermissionError(
-                    f"Tool '{tool_name}' is not globally allowed."
+                    f"MCP tool '{tool_name}' is not allowed."
                 )
 
-        payload = {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": method,
-            "params": params,
-        }
+            arguments = params.get("arguments") or {}
 
-        try:
-            response = await self.client.post("", json=payload)
-            response.raise_for_status()
-            result = response.json()
+            result = await self._session.call_tool(
+                tool_name,
+                arguments=arguments,
+            )
 
-            if "error" in result:
-                raise RuntimeError(f"MCP error: {result['error']}")
+            return result.model_dump(by_alias=True, mode="json")
 
-            return result.get("result")
-
-        except Exception as exc:
-            raise RuntimeError(
-                f"Failed to call MCP method {method}: {exc}"
-            ) from exc
+        raise NotImplementedError(
+            f"Unsupported MCP method: {method}"
+        )
 
     async def list_tools(self) -> List[Dict[str, Any]]:
-        """Returns the tools advertised by the MCP server."""
+        """Liefert die vom MCP-Server veröffentlichten Tools."""
 
         result = await self._call_mcp_method("tools/list", {})
 
@@ -88,14 +141,9 @@ class NextcloudMCPClient:
     @staticmethod
     def _build_args_schema(
         tool_name: str,
-        input_schema: Optional[Dict[str, Any]],
+        input_schema: Dict[str, Any],
     ) -> Type:
-        """
-        Creates a Pydantic input schema from an MCP JSON schema.
-
-        Supports common JSON Schema primitive types and basic
-        object/array arguments.
-        """
+        """Erzeugt ein Pydantic-Argumentschema aus dem MCP-JSON-Schema."""
 
         schema = input_schema or {}
         properties = schema.get("properties", {})
@@ -115,7 +163,6 @@ class NextcloudMCPClient:
         for field_name, definition in properties.items():
             json_type = definition.get("type", "string")
             python_type = type_mapping.get(json_type, Any)
-
             description = definition.get("description", "")
 
             if field_name in required:
@@ -129,9 +176,10 @@ class NextcloudMCPClient:
                 Field(default, description=description),
             )
 
-        model_name = "".join(
-            part.title() for part in tool_name.split("_")
-        ) + "Input"
+        model_name = (
+            "".join(part.title() for part in tool_name.split("_"))
+            + "Input"
+        )
 
         return create_model(model_name, **fields)
 
@@ -140,13 +188,15 @@ class NextcloudMCPClient:
         allowed_names: List[str],
     ) -> List[StructuredTool]:
         """
-        Returns only tools allowed globally and for the agent.
+        Erstellt LangChain-Tools aus den erlaubten MCP-Tools.
+
+        Es gelten beide Filter:
+        - allowed_tools aus dem Konstruktor
+        - allowed_names aus dem aktuellen Aufruf
         """
 
         requested_tools = set(allowed_names)
-        effective_tools = self.allowed_tools.intersection(
-            requested_tools
-        )
+        effective_tools = self.allowed_tools.intersection(requested_tools)
 
         all_tools = await self.list_tools()
         langchain_tools = []
@@ -167,13 +217,11 @@ class NextcloudMCPClient:
 
             async def tool_wrapper(
                 tool_name=name,
-                **kwargs,
-            ):
-                # Defense in depth.
+                **kwargs: Any,
+            ) -> Any:
                 if tool_name not in effective_tools:
                     raise PermissionError(
-                        f"Tool '{tool_name}' is not allowed "
-                        "for this agent."
+                        f"MCP tool '{tool_name}' is not allowed."
                     )
 
                 return await self._call_mcp_method(
@@ -195,6 +243,12 @@ class NextcloudMCPClient:
 
         return langchain_tools
 
-    async def close(self):
-        """Closes the underlying HTTP client."""
-        await self.client.aclose()
+    async def close(self) -> None:
+        """Schließt die MCP-Session und den zugehörigen Transport."""
+
+        if self._exit_stack is not None:
+            await self._exit_stack.aclose()
+
+        self._exit_stack = None
+        self._session = None
+        self._connected = False

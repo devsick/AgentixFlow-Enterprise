@@ -23,6 +23,7 @@ dependencies = [
     "anyio",
     "typing-extensions",
     "aiofiles",
+    "mcp>=1.9",
 ]
 
 [project.optional-dependencies]

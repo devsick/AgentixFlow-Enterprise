@@ -6,6 +6,7 @@ from src.graphs.profile_management.state import ProfileManagementState
 from src.graphs.profile_management.agents.detect_collective_agent.detect_collective_agent import (
     DetectCollectiveAgent,
 )
+from src.shared.node_wrapper import observe_node
 
 
 class DetectCollectiveAgentNode:
@@ -13,44 +14,37 @@ class DetectCollectiveAgentNode:
     Identifies the target collective and writes the result
     into the graph state.
     """
-
-    def __init__():
+    
+    def __init__(self):
         self.agent = DetectCollectiveAgent()
 
+    @observe_node("detect_collective_agent_node")
     async def __call__(
         self,
         state: ProfileManagementState,
     ) -> Dict[str, Any]:
 
-        # Find the most recent user message.
-        last_message = next(
-            (
-                message.content
-                for message in reversed(state["messages"])
-                if isinstance(message, HumanMessage)
-            ),
-            None,
-        )
-
-        if last_message is None:
-            return {
-                "metadata": {
-                    **state.get("metadata", {}),
-                    "error": "No user message found.",
-                },
-                "messages": [
-                    AIMessage(
-                        content="Error: No user message found."
-                    )
-                ],
-            }
-
         # Retrieve the MCP client from the shared graph state.
         client = state.get("mcp_client")
 
         try:
+            collective_name = state.get("collective_name")
+
+            if not collective_name:
+                return {
+                    "metadata": {
+                        **state.get("metadata", {}),
+                        "error": "No collective_name found in state.",
+                    },
+                    "messages": [
+                        AIMessage(
+                            content="- Es wurde kein Collective-Name im State gefunden.\n"
+                        )
+                    ],
+                }
+
             result = await self.agent.run(
-                last_message=last_message,
+                last_message=f"collective_name:{collective_name}",
                 mcp_client=client,
             )
 
@@ -82,27 +76,30 @@ class DetectCollectiveAgentNode:
 
         if new_collective["created"]:
             status_text = (
-                f"A new collective '{new_collective['name']}' "
-                "has been successfully created."
+                f"Collective '{new_collective['name']}' wurde erstellt "
+                f"(ID: {new_collective['id']})."
             )
         elif new_collective["exists"]:
             status_text = (
-                f"Collective '{new_collective['name']}' was found."
+                f"Collective '{new_collective['name']}' wurde gefunden "
+                f"(ID: {new_collective['id']})."
             )
         elif not new_collective["id"]:
-            status_text = (
-                "Error: The collective could not be identified."
-            )
+            status_text = "Die angeforderte Collective wurde nicht gefunden."
         else:
-            status_text = "Collective identified."
+            status_text = (
+                "Die Collective konnte nicht eindeutig identifiziert werden."
+            )
 
         return {
             "collective": new_collective,
             "messages": [
-                AIMessage(content=status_text)
+                AIMessage(content=status_text + "\n")
             ],
             "total_tokens": usage.get("total_tokens", 0),
-            "metadata": {
+            "metadata": {**state.get("metadata", {})}
+        }
+
                 **state.get("metadata", {}),
                 "agent": "detect_collective",
             },

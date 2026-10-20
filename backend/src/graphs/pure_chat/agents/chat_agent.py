@@ -3,8 +3,10 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from src.settings.config_store import config_store
 
+
 class ChatAgent:
     def __init__(self, api_key: str = None):
+        
         # Lade das Profil aus der Konfiguration
         profile = config_store.llm_profiles.get("oogabooga")
         if not profile:

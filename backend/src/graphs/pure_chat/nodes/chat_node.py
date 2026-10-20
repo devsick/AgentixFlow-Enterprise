@@ -4,6 +4,7 @@ from src.graphs.pure_chat.agents.chat_agent import ChatAgent
 from src.shared.node_wrapper import observe_node
 
 class ChatNode:
+    stream_mode = "live"
     def __init__(self):
         self.agent = ChatAgent()
 

@@ -1,92 +1,136 @@
 from typing import Any, Dict
-from langchain_core.messages import AIMessage, HumanMessage
+
+from langchain_core.messages import AIMessage
+
 from src.graphs.profile_management.state import ProfileManagementState
-from src.graphs.profile_management.agents.load_documents.agents.load_documents.load_documents_agent import (
-    LoadDocumentsAgent,
-)
+from src.shared.node_wrapper import observe_node
 
 
 class LoadDocumentsAgentNode:
     """
-    Node, der den LoadDocumentsAgent aufruft und die geladenen Dokumente in den State schreibt.
+    Deterministic node that loads files directly using MCP tools.
     """
 
     def __init__(self):
-        self.agent = LoadDocumentsAgent()
+        pass
 
+    @observe_node("load_documents_agent_node")
     async def __call__(
         self,
         state: ProfileManagementState,
     ) -> Dict[str, Any]:
+        """
+        Deterministic node that loads files directly using MCP tools.
+        """
+        file_paths = state.get("file_paths", [])
+        client = state.get("mcp_client")
 
-        # 1. Liste der extrahierten Pfade aus dem State holen.
-        # Wir gehen davon aus, dass der vorherige Node diese in state["extracted_file_paths"] geschrieben hat.
-        file_paths = state.get("extracted_file_paths", [])
-        
         if not file_paths:
             return {
                 "metadata": {
                     **state.get("metadata", {}),
-                    "error": "No file paths provided to LoadDocumentsAgent.",
+                    "error": "No file paths provided.",
                 },
-                "messages": [
-                    AIMessage(
-                        content="Error: No file paths found to load."
-                    )
-                ],
+                "messages": [AIMessage(content="Error: No file paths found to load.")],
             }
 
-        # 2. MCP Client aus dem State holen
-        client = state.get("mcp_client")
+        if not client:
+            return {
+                "metadata": {
+                    **state.get("metadata", {}),
+                    "error": "MCP client not found in state.",
+                },
+                "messages": [AIMessage(content="Error: MCP client is missing.")],
+            }
+
+        documents = []
+        success_count = 0
+        error_count = 0
 
         try:
-            # 3. Agent ausführen
-            # Der Agent erwartet nun eine Liste von Strings (list[str])
-            result = await self.agent.run(
-                file_paths=file_paths,
-                mcp_client=client,
-            )
+            # Get the specific tool for reading files
+            tools = await client.get_tools(allowed_names=["nc_webdav_read_file"])
+            read_tool = next((t for t in tools if t.name == "nc_webdav_read_file"), None)
 
-            # Die Agent-Daten enthalten das Array 'documents'
-            documents = result["data"].get("documents", [])
+            if not read_tool:
+                raise RuntimeError("Required tool 'nc_webdav_read_file' not available.")
 
-            # 4. Eine inhaltsfreie Zusammenfassung für die AIMessage erstellen
-            # Wir listen nur den Pfad und den Status auf, niemals den 'content'.
+            for path in file_paths:
+                try:
+                    try:
+                        # Try with parse_document="markdown" first
+                        result = await read_tool.ainvoke({"path": path, "parse_document": "markdown"})
+                    except Exception:
+                        # Fallback if the parameter is not supported by the tool
+                        result = await read_tool.ainvoke({"path": path})
+                    
+                    # Handle different possible result formats from MCP tools
+                    if isinstance(result, dict):
+                        # Check if it's the structured ReadFileResponse
+                        if "content" in result:
+                            content = result["content"]
+                            # If the tool reported a failed parse, we should reflect that
+                            if result.get("parse_status") in ["failed", "skipped"]:
+                                status = "error"
+                                error_msg = f"Parse status: {result.get('parse_status')} ({result.get('parse_notes', 'No notes provided')})"
+                            else:
+                                status = "success"
+                                error_msg = None
+                        else:
+                            # Fallback for other dict structures
+                            content = str(result)
+                            status = "success"
+                            error_msg = None
+                    else:
+                        content = str(result)
+                        status = "success"
+                        error_msg = None
+
+                    documents.append({
+                        "path": path,
+                        "status": status,
+                        "content": content,
+                        "error": error_msg
+                    })
+                    
+                    if status == "success":
+                        success_count += 1
+                    else:
+                        error_count += 1
+                except Exception as e:
+                    documents.append({
+                        "path": path,
+                        "status": "error",
+                        "content": None,
+                        "error": str(e)
+                    })
+                    error_count += 1
+
+            # Construct summary message listing all processed files
             summary_lines = []
             for doc in documents:
-                path = doc.get("path") or doc.get("name", "unknown")
-                status = doc.get("status", "error")
-                error = doc.get("error")
-                
-                line = f"- {path}: {status}"
-                if status == "error" and error:
-                    line += f" ({error})"
-                summary_lines.append(line)
+                if doc["status"] == "success":
+                    summary_lines.append(f"✅ {doc['path']}")
+                else:
+                    summary_lines.append(f"❌ {doc['path']} (Error: {doc['error']})")
 
-            summary_text = "Document loading process completed:\n" + "\n".join(summary_lines)
+            summary_text = (
+                f"File loading process completed ({success_count} success, {error_count} failure):\n"
+                + "\n".join(summary_lines)
+            )
 
-            # 5. State-Update vorbereiten
-            # 'loaded_documents' enthält die vollständigen Daten (inkl. content) für den weiteren Workflow.
-            # Die 'messages' enthalten nur die inhaltsfreie Status-Zusammenfassung.
             return {
-                "loaded_documents": documents,
-                "messages": [
-                    AIMessage(content=summary_text)
-                ],
+                "documents": documents,
+                "messages": [AIMessage(content=summary_text + "\n")],
+                "total_tokens": 0,
+                "metadata": {**state.get("metadata", {})}
             }
 
         except Exception as exc:
             return {
                 "metadata": {
                     **state.get("metadata", {}),
-                    "error": f"LoadDocuments failed: {exc}",
+                    "error": f"Deterministic load failed: {exc}",
                 },
-                "messages": [
-                    AIMessage(
-                        content=(
-                            "Error loading documents: "
-                            f"{exc}"
-                        )
-                    )
-                ],
+                "messages": [AIMessage(content=f"Error in loading process: {exc}\n")],
             }

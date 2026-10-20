@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
 from src.tools.nextcloud_mcp_client import NextcloudMCPClient
-
+from src.shared.node_wrapper import observe_node
 
 # Global allowlist: maximum permissions for all agents.
 BASELINE_TOOLS = [
@@ -23,11 +23,25 @@ async def initialize_mcp_node(state: Any) -> Dict[str, Any]:
     Initializes the MCP client with the global allowlist.
     The client is stored in the LangGraph state.
     """
+    
+
 
     client = NextcloudMCPClient(
         allowed_tools=BASELINE_TOOLS
     )
 
-    return {
-        "mcp_client": client,
-    }
+    try:
+      
+        print(
+            f"--- MCP: Allowed_Tools: {client.allowed_tools} ---",
+            flush=True,
+        )
+
+    except Exception as e:
+        print(
+            f"--- MCP Fehler: {type(e).__name__}: {e} ---",
+            flush=True,
+        )
+        raise
+
+    return {"mcp_client": client}
