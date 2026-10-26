@@ -61,7 +61,7 @@ class OrchestratorAgentNode:
             if file_paths:
                 msg_parts.append(f"Files detected: {', '.join(file_paths)}")
             
-            new_messages.append(AIMessage(content="\n".join(msg_parts)))
+            new_messages.append(AIMessage(content="\n".join(msg_parts) + "\n"))
 
         return {
             "intent": decision["intent"],

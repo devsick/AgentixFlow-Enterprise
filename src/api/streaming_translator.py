@@ -30,6 +30,12 @@ VALID_STREAMING_MODES = {
     STREAMING_MODE_STATUS_ONLY,
 }
 
+# Thinking-Logging:
+# True  = LLM-Streaming-Inhalte vollständig protokollieren.
+# False = Nur llm_end als LLM-Event protokollieren.
+#         Das Streaming an den Client bleibt unverändert.
+LOG_THINKING = False
+
 
 def _model_dump(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
@@ -195,6 +201,57 @@ def _dump_chunk_for_monitoring(chunk: Any) -> dict[str, Any]:
         }
 
 
+def _dump_output_without_reasoning(output: Any) -> Any:
+    """Remove reasoning fields from monitoring output without modifying output."""
+    if isinstance(output, dict):
+        cleaned = {}
+
+        for key, value in output.items():
+            if key in {
+                "reasoning_content",
+                "thinking",
+                "thought",
+                "thoughts",
+            }:
+                continue
+
+            if key == "additional_kwargs" and isinstance(value, dict):
+                cleaned_kwargs = {
+                    k: v
+                    for k, v in value.items()
+                    if k != "reasoning_content"
+                }
+                cleaned[key] = cleaned_kwargs
+            else:
+                cleaned[key] = _dump_output_without_reasoning(value)
+
+        return cleaned
+
+    if isinstance(output, list):
+        return [_dump_output_without_reasoning(item) for item in output]
+
+    if isinstance(output, tuple):
+        return [_dump_output_without_reasoning(item) for item in output]
+
+    if isinstance(output, BaseMessage):
+        if hasattr(output, "model_dump"):
+            data = output.model_dump()
+        elif hasattr(output, "dict"):
+            data = output.dict()
+        else:
+            data = vars(output).copy()
+
+        return _dump_output_without_reasoning(data)
+
+    if hasattr(output, "model_dump"):
+        return _dump_output_without_reasoning(output.model_dump())
+
+    if hasattr(output, "dict"):
+        return _dump_output_without_reasoning(output.dict())
+
+    return output
+
+
 class StreamingTranslator:
     def __init__(self, graph: Any):
         self.graph = graph
@@ -277,7 +334,7 @@ class StreamingTranslator:
             node_name = metadata.get("langgraph_node")
 
             # -------------------------------------------------
-            # 1. LLM-Streaming: vollständig protokollieren
+            # 1. LLM-Streaming
             # -------------------------------------------------
             if event_type == "on_chat_model_stream":
                 chunk = event_data.get("chunk")
@@ -285,35 +342,38 @@ class StreamingTranslator:
                 if chunk is None:
                     continue
 
-                full_chunk_data = _dump_chunk_for_monitoring(chunk)
-
-                await monitoring_writer.log_event(
-                    graph_id,
-                    run_id,
-                    "llm_chunk_full",
-                    {"data": full_chunk_data},
-                )
-
                 content = _message_content(chunk)
                 reasoning_content = _extract_reasoning(chunk)
 
-                if reasoning_content:
+                # LLM-Streaming-Logging nur bei aktiviertem Schalter.
+                if LOG_THINKING:
+                    full_chunk_data = _dump_chunk_for_monitoring(chunk)
+
                     await monitoring_writer.log_event(
                         graph_id,
                         run_id,
-                        "llm_thinking",
-                        {"content": reasoning_content},
+                        "llm_chunk_full",
+                        {"data": full_chunk_data},
                     )
 
-                if content:
-                    await monitoring_writer.log_event(
-                        graph_id,
-                        run_id,
-                        "llm_content",
-                        {"content": content},
-                    )
+                    if reasoning_content:
+                        await monitoring_writer.log_event(
+                            graph_id,
+                            run_id,
+                            "llm_thinking",
+                            {"content": reasoning_content},
+                        )
 
-                # Nur Content wird abhängig vom Modus gefiltert.
+                    if content:
+                        await monitoring_writer.log_event(
+                            graph_id,
+                            run_id,
+                            "llm_content",
+                            {"content": content},
+                        )
+
+                # Die Ausgabe an den Client bleibt unabhängig
+                # vom Logging-Schalter unverändert.
                 delta = {}
 
                 if streaming_mode == STREAMING_MODE_LIVE and content:
@@ -391,11 +451,16 @@ class StreamingTranslator:
             # 3. LLM-Ende weiterhin protokollieren
             # -------------------------------------------------
             if event_type == "on_chat_model_end":
+                output = event_data.get("output")
+
+                if not LOG_THINKING:
+                    output = _dump_output_without_reasoning(output)
+
                 await monitoring_writer.log_event(
                     graph_id,
                     run_id,
                     "llm_end",
-                    {"output": str(event_data.get("output"))},
+                    {"output": str(output)},
                 )
 
                 continue

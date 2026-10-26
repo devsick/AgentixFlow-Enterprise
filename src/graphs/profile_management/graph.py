@@ -8,13 +8,24 @@ from src.graphs.profile_management.nodes.orchestrator_agent_node import (
     OrchestratorAgentNode,
 )
 from src.graphs.profile_management.nodes.router_node import RouterNode
-from src.graphs.profile_management.nodes.detect_collective_agent_node import (
+from src.graphs.profile_management.nodes.detect_collective_node import (
     DetectCollectiveAgentNode,
 )
-from src.graphs.profile_management.nodes.load_documents_agent_node import (
+from src.graphs.profile_management.nodes.load_documents_node import (
     LoadDocumentsAgentNode,
 )
-
+from src.graphs.profile_management.nodes.extract_persona_agent_node import (
+    ExtractPersonaAgentNode,
+)
+from src.graphs.profile_management.nodes.extract_project_agent_node import (
+    ExtractProjectAgentNode,
+)
+from src.graphs.profile_management.nodes.extract_employments_agent_node import (
+    ExtractEmploymentAgentNode,
+)
+from src.graphs.profile_management.nodes.extract_certificates_agent_node import (
+    ExtractCertificatesAgentNode,
+)
 
 def create_profile_management_graph():
     workflow = StateGraph(ProfileManagementState)
@@ -29,12 +40,26 @@ def create_profile_management_graph():
     })
     workflow.add_node("router", RouterNode())
     workflow.add_node("detect_collective", DetectCollectiveAgentNode(), metadata={
-        "streaming_mode": "status_only",
-    })
+            "streaming_mode": "status_only",
+        })
+   
     workflow.add_node("load_documents", LoadDocumentsAgentNode(), metadata={
         "streaming_mode": "status_only",
     })
+    workflow.add_node("extract_persona", ExtractPersonaAgentNode(), metadata={
+            "streaming_mode": "status_only",
+        })
 
+    workflow.add_node("extract_projects", ExtractProjectAgentNode(), metadata={
+                "streaming_mode": "status_only",
+            })
+    workflow.add_node("extract_employments", ExtractEmploymentAgentNode(), metadata={
+                    "streaming_mode": "status_only",
+                })
+    workflow.add_node("extract_certificates", ExtractCertificatesAgentNode(), metadata={
+                        "streaming_mode": "status_only",
+                    })
+  
     # --------------------------------------------------
     # 2. Einstieg und Orchestrator
     # --------------------------------------------------
@@ -72,7 +97,13 @@ def create_profile_management_graph():
     # --------------------------------------------------
 
     workflow.add_edge("detect_collective", "load_documents")
-    workflow.add_edge("load_documents", END)
+    workflow.add_edge("load_documents", "extract_employments")
+   # workflow.add_edge("load_documents", "extract_persona")
+   # workflow.add_edge("extract_persona","extract_projects")
+   # workflow.add_edge("extract_projects","extract_employments")
+   # workflow.add_edge("extract_employments", "extract_certificates")
+   # workflow.add_edge("extract_certificates", END)
+    workflow.add_edge("extract_employments", END)
 
     # --------------------------------------------------
     # 5. Graph kompilieren

@@ -1,15 +1,10 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 import json
 import re
 from pathlib import Path
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import (
-    HumanMessage,
-    SystemMessage,
-    ToolMessage,
-    AIMessage,
-)
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.settings.config_store import config_store
 from src.shared.reasoning_chat_openai import ReasoningChatOpenAI
@@ -17,31 +12,15 @@ from src.shared.reasoning_chat_openai import ReasoningChatOpenAI
 
 class ExtractPersonaAgent:
     """
-    Agent responsible for extracting persona information from documents 
-    and updating the 001-Person page in a Nextcloud Collective.
+    Agent responsible for analyzing documents and generating
+    the 001-Person profile content.
     """
 
-    ALLOWED_TOOLS = [
-        "collectives_get_collectives",
-        "collectives_get_pages",
-        "collectives_get_page",
-        "collectives_search_pages",
-        "nc_webdav_list_directory",
-        "nc_webdav_read_file",
-        "nc_webdav_write_file",
-        "nc_webdav_create_directory",
-        "nc_webdav_search_files",
-        "nc_webdav_find_by_name",
-    ]
-
     PROMPT_PATH = Path(__file__).with_name("extract_persona_systemprompt.md")
-
-    MAX_TOOL_ROUNDS = 15
 
     def __init__(self):
         with self.PROMPT_PATH.open("r", encoding="utf-8") as file:
             self.system_prompt = file.read()
-        
 
         self._init_llm()
 
@@ -69,7 +48,7 @@ class ExtractPersonaAgent:
         )
 
     def _parse_json_content(self, content: Any) -> Dict[str, Any]:
-        """Extracts a JSON object from the final LLM response."""
+        """Extracts a JSON object from the LLM response."""
         if isinstance(content, list):
             content = "".join(
                 block.get("text", "")
@@ -94,37 +73,53 @@ class ExtractPersonaAgent:
             if start != -1 and end != -1:
                 content = content[start:end + 1]
 
-        return json.loads(content)
+        result = json.loads(content)
+
+        if not isinstance(result, dict):
+            raise ValueError("LLM response must contain a JSON object.")
+
+        if not isinstance(result.get("content"), str):
+            raise ValueError("Agent response must contain a string field 'content'.")
+
+        if not isinstance(result.get("open_questions"), list):
+            raise ValueError("Agent response must contain a list field 'open_questions'.")
+
+        return result
 
     async def run(
         self,
-        collective: Dict[str, Any],
         documents: list[Dict[str, Any]],
-        mcp_client: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
-        Runs the agent and executes MCP tools requested by the LLM.
+        Analyzes the supplied documents and returns the persona profile
+        content and open questions as JSON.
         """
-        messages = [
-            SystemMessage(content=self.system_prompt),
-            HumanMessage(
-                content=f"Collective Name: {collective.get('name')}, Collective ID: {collective.get('id')}"
-            ),
-        ]
+        if not documents:
+            raise ValueError("No documents were provided to ExtractPersonaAgent.")
 
-        # Append the documents to the messages to ensure the LLM has access to them.
         doc_content = ""
-        for doc in documents:
-            name = doc.get("name", "unknown")
+
+        for index, doc in enumerate(documents, start=1):
+            name = doc.get("name") or Path(doc.get("path", "unknown")).name
             path = doc.get("path", "unknown")
             content = doc.get("content", "")
-            doc_content += f"--- Document: {name} (Path: {path}) ---\n{content}\n\n"
-        
-        if doc_content:
-            messages.append(HumanMessage(content=f"Source Documents:\n{doc_content}"))
 
-        # [Implementation of the agent loop would follow, utilizing messages and mcp_client]
-        # Note: The actual loop implementation is omitted here as per the previous pattern, 
-        # but the message construction now correctly includes the collective and documents.
+            if not isinstance(content, str) or not content.strip():
+                continue
 
-        return {} # Placeholder
+            doc_content += (
+                f"--- Document {index}: {name} (Path: {path}) ---\n"
+                f"{content}\n\n"
+            )
+
+        if not doc_content:
+            raise ValueError("None of the provided documents contain usable text.")
+
+        messages = [
+            SystemMessage(content=self.system_prompt),
+            HumanMessage(content=f"Source Documents:\n{doc_content}"),
+        ]
+
+        response = await self.llm.ainvoke(messages)
+
+        return self._parse_json_content(response.content)

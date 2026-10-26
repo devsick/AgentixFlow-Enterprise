@@ -4,6 +4,7 @@ from langchain_core.messages import AIMessage
 
 from src.graphs.profile_management.state import ProfileManagementState
 from src.shared.node_wrapper import observe_node
+import json
 
 
 class DetectCollectiveAgentNode:
@@ -40,16 +41,43 @@ class DetectCollectiveAgentNode:
 
             # 1. Get all collectives
             # We allow both tools in the request to ensure we get the right ones if they exist
-            tools = await client.get_tools(allowed_names=["nextcloud-mcp_collectives_get_collectives", "nextcloud-mcp_collectives_create_collective"])
+            tools = await client.get_tools(
+                allowed_names=[
+                    "collectives_get_collectives",
+                    "collectives_create_collective",
+                ]
+            )
             
-            get_collectives_tool = next((t for t in tools if t.name == "nextcloud-mcp_collectives_get_collectives"), None)
-            create_collective_tool = next((t for t in tools if t.name == "nextcloud-mcp_collectives_create_collective"), None)
+            get_collectives_tool = next(
+                (t for t in tools if t.name == "collectives_get_collectives"),
+                None,
+            )
+            
+            create_collective_tool = next(
+                (t for t in tools if t.name == "collectives_create_collective"),
+                None,
+            )
 
             if not get_collectives_tool:
-                raise RuntimeError("Required tool 'nextcloud-mcp_collectives_get_collectives' not available.")
+                raise RuntimeError(
+                    "Required tool 'collectives_get_collectives' not available."
+                )
 
             # List all collectives
-            existing_collectives = await get_collectives_tool.ainvoke({})
+            existing_collectives_result = await get_collectives_tool.ainvoke({})
+
+            # MCP tool result can be returned either as a dict
+            # or as a JSON string. The actual structured payload
+            # containing the collectives is under structuredContent.
+            if isinstance(existing_collectives_result, str):
+                existing_collectives_result = json.loads(
+                    existing_collectives_result
+                )
+
+            existing_collectives = existing_collectives_result[
+                "structuredContent"
+            ]["collectives"]
+            
             
             # 2. Check for exact match
             matched_collective = None
@@ -65,14 +93,22 @@ class DetectCollectiveAgentNode:
                     "exists": True,
                     "created": False,
                 }
-                status_text = f"Collective '{new_collective['name']}' wurde gefunden (ID: {new_collective['id']}).\n"
+                status_text = (
+                    f"Collective '{new_collective['name']}' "
+                    f"wurde gefunden (ID: {new_collective['id']}).\n"
+                )
             else:
                 # 3. Try to create it
                 if not create_collective_tool:
-                    raise RuntimeError("Required tool 'nextcloud-mcp_collectives_create_collective' not available to create the collective.")
+                    raise RuntimeError(
+                        "Required tool 'collectives_create_collective' "
+                        "not available to create the collective."
+                    )
                 
                 try:
-                    creation_result = await create_collective_tool.ainvoke({"name": collective_name})
+                    creation_result = await create_collective_tool.ainvoke(
+                        {"name": collective_name}
+                    )
                     
                     new_collective = {
                         "name": creation_result["name"],
@@ -80,7 +116,10 @@ class DetectCollectiveAgentNode:
                         "exists": False,
                         "created": True,
                     }
-                    status_text = f"Collective '{new_collective['name']}' wurde erstellt (ID: {new_collective['id']}).\n"
+                    status_text = (
+                        f"Collective '{new_collective['name']}' "
+                        f"wurde erstellt (ID: {new_collective['id']}).\n"
+                    )
                 except Exception as creation_err:
                     # If creation fails, return error state
                     new_collective = {
@@ -89,7 +128,10 @@ class DetectCollectiveAgentNode:
                         "exists": False,
                         "created": False,
                     }
-                    status_text = f"Fehler beim Erstellen der Collective '{collective_name}': {str(creation_err)}\n"
+                    status_text = (
+                        f"Fehler beim Erstellen der Collective "
+                        f"'{collective_name}': {str(creation_err)}\n"
+                    )
                     return {
                         "collective": new_collective,
                         "messages": [AIMessage(content=status_text)],
@@ -113,7 +155,7 @@ class DetectCollectiveAgentNode:
             return {
                 "metadata": {
                     **state.get("metadata", {}),
-                    "error": f"DetectCollective failed: {exc}",
+                    "error": f"DetectCollective failed: {exc}\n",
                 },
                 "messages": [
                     AIMessage(

@@ -9,6 +9,7 @@ BASELINE_TOOLS = [
     "collectives_get_pages",
     "collectives_get_page",
     "collectives_search_pages",
+    "collectives_create_page",
     "nc_webdav_list_directory",
     "nc_webdav_read_file",
     "nc_webdav_write_file",

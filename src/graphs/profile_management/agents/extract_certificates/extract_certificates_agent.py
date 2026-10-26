@@ -1,15 +1,11 @@
-from typing import Any, Dict, Optional
+
+from typing import Any, Dict
 import json
 import re
 from pathlib import Path
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import (
-    HumanMessage,
-    SystemMessage,
-    ToolMessage,
-    AIMessage,
-)
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.settings.config_store import config_store
 from src.shared.reasoning_chat_openai import ReasoningChatOpenAI
@@ -17,31 +13,21 @@ from src.shared.reasoning_chat_openai import ReasoningChatOpenAI
 
 class ExtractCertificatesAgent:
     """
-    Agent responsible for extracting certificates from documents 
-    and creating or updating the 031-Zertifikate page in a Nextcloud Collective.
+    Agent responsible for extracting substantiated certificates
+    from supplied documents and generating the 031-Zertifikate
+    Markdown content.
+
+    This agent performs extraction only. Page creation, updates,
+    and other external operations are handled by the calling node.
     """
 
-    ALLOWED_TOOLS = [
-        "collectives_get_collectives",
-        "collectives_get_pages",
-        "collectives_get_page",
-        "collectives_search_pages",
-        "nc_webdav_list_directory",
-        "nc_webdav_read_file",
-        "nc_webdav_write_file",
-        "nc_webdav_create_directory",
-        "nc_webdav_search_files",
-        "nc_webdav_find_by_name",
-    ]
-
-    PROMPT_PATH = Path(__file__).with_name("extract_certificates_systemprompt.md")
-
-    MAX_TOOL_ROUNDS = 15
+    PROMPT_PATH = Path(__file__).with_name(
+        "extract_certificates_systemprompt.md"
+    )
 
     def __init__(self):
         with self.PROMPT_PATH.open("r", encoding="utf-8") as file:
             self.system_prompt = file.read()
-
 
         self._init_llm()
 
@@ -49,7 +35,9 @@ class ExtractCertificatesAgent:
         profile = config_store.llm_profiles.get("oogabooga")
 
         if not profile:
-            raise ValueError("LLM Profile 'oogabooga' not found in configuration.")
+            raise ValueError(
+                "LLM Profile 'oogabooga' not found in configuration."
+            )
 
         LLMClass = (
             ReasoningChatOpenAI
@@ -69,7 +57,8 @@ class ExtractCertificatesAgent:
         )
 
     def _parse_json_content(self, content: Any) -> Dict[str, Any]:
-        """Extracts a JSON object from the final LLM response."""
+        """Extract and validate the JSON object returned by the LLM."""
+
         if isinstance(content, list):
             content = "".join(
                 block.get("text", "")
@@ -78,7 +67,9 @@ class ExtractCertificatesAgent:
             )
 
         if not isinstance(content, str):
-            raise ValueError("LLM response content is not a string.")
+            raise ValueError(
+                "LLM response content is not a string."
+            )
 
         match = re.search(
             r"```json\s*(.*?)\s*```",
@@ -91,40 +82,116 @@ class ExtractCertificatesAgent:
         else:
             start = content.find("{")
             end = content.rfind("}")
+
             if start != -1 and end != -1:
                 content = content[start:end + 1]
 
-        return json.loads(content)
+        try:
+            result = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"LLM returned invalid JSON: {exc}"
+            ) from exc
+
+        if not isinstance(result, dict):
+            raise ValueError(
+                "LLM response must contain a JSON object."
+            )
+
+        if not isinstance(result.get("content"), str):
+            raise ValueError(
+                "Agent response must contain a string field 'content'."
+            )
+
+        if not isinstance(result.get("open_questions"), list):
+            raise ValueError(
+                "Agent response must contain a list field 'open_questions'."
+            )
+
+        if not all(
+            isinstance(question, str)
+            for question in result["open_questions"]
+        ):
+            raise ValueError(
+                "All entries in 'open_questions' must be strings."
+            )
+
+        return {
+            "content": result["content"],
+            "open_questions": result["open_questions"],
+        }
 
     async def run(
         self,
-        collective: Dict[str, Any],
         documents: list[Dict[str, Any]],
-        mcp_client: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
-        Runs the agent and executes MCP tools requested by the LLM.
+        Extracts substantiated certificates from the supplied documents.
+
+        Returns:
+            A dictionary containing:
+            - content: Complete Markdown content for 031-Zertifikate.
+            - open_questions: Relevant unanswered certificate questions.
+
+        No tools or external services are called by this method,
+        apart from the configured LLM invocation.
         """
+
+        if not isinstance(documents, list) or not documents:
+            raise ValueError(
+                "No documents were provided to ExtractCertificatesAgent."
+            )
+
+        doc_parts = []
+
+        for index, doc in enumerate(documents, start=1):
+            if not isinstance(doc, dict):
+                continue
+
+            path_value = doc.get("path")
+            name_value = doc.get("name")
+
+            path = (
+                path_value
+                if isinstance(path_value, str) and path_value.strip()
+                else "unknown"
+            )
+
+            name = (
+                name_value
+                if isinstance(name_value, str) and name_value.strip()
+                else Path(path).name
+            )
+
+            content = doc.get("content", "")
+
+            if not isinstance(content, str) or not content.strip():
+                continue
+
+            doc_parts.append(
+                f"--- Document {index}: {name} (Path: {path}) ---\n"
+                f"{content}\n"
+            )
+
+        if not doc_parts:
+            raise ValueError(
+                "None of the provided documents contain usable text."
+            )
+
+        doc_content = "\n".join(doc_parts)
+
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(
-                content=f"Collective Name: {collective.get('name')}, Collective ID: {collective.get('id')}"
+                content=(
+                    "Extract and consolidate all substantiated certificates "
+                    "from the following source documents. Follow the system "
+                    "prompt exactly and return only the required JSON object.\n\n"
+                    f"Source Documents:\n{doc_content}"
+                )
             ),
         ]
 
-        # Append the documents to the messages to ensure the LLM has access to them.
-        doc_content = ""
-        for doc in documents:
-            name = doc.get("name", "unknown")
-            path = doc.get("path", "unknown")
-            content = doc.get("content", "")
-            doc_content += f"--- Document: {name} (Path: {path}) ---\n{content}\n\n"
-        
-        if doc_content:
-            messages.append(HumanMessage(content=f"Source Documents:\n{doc_content}"))
+        response = await self.llm.ainvoke(messages)
 
-        # [Implementation of the agent loop would follow, utilizing messages and mcp_client]
-        # Note: The actual loop implementation is omitted here as per the pattern, 
-        # but the message construction now correctly includes the collective and documents.
-
-        return {} # Placeholder
+        return self._parse_json_content(response.content)
