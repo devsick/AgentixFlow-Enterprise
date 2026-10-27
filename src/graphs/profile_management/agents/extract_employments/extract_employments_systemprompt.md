@@ -1,19 +1,22 @@
 # Task
-Extract all employment and professional experience stations from the provided `documents` into a JSON object with the key `employments`.
+Extract employment stations ONLY from CV/Résumé documents.
 
-# Reasoning Guidelines
-- **Focus on identification and extraction.** Use your thoughts only to resolve ambiguities within CV-structured documents.
-- **Document Selection:** Use only documents that follow the structure of a CV, résumé, or professional profile.
-- **Direct Extraction:** Extract employment stations directly from the identified CV documents. 
-- **No reconstruction.** Avoid exhaustive, line-by-line summaries or manual re-typing of the data during the reasoning phase.
-- **Be concise.** Once you have identified the mapping for a station, move immediately to the output. Do not loop through every field individually in your thoughts.
+# Process Rules (Follow strictly)
+1. **Identify Document Type:** Is this a CV or Résumé?
+2. **If YES:** Extract the employment stations directly into the JSON schema.
+3. **If NO (e.g., Project List, Task List, Cover Letter):** DO NOT read the content. Skip this document immediately.
+4. **No Connection:** Never attempt to combine information from different documents. Treat each CV as a standalone source.
 
 # Extraction Rules
-- Extract data exclusively from documents that function as CVs, résumés, or professional profiles.
-- Preserve the original language of the source documents throughout the extraction.
-- Use the exact, original wording for all extracted content, especially for the `description` field.
-- **Mandatory `company_organization`:** Every employment entry must have a non-empty `company_organization`. If no formal company name is found, use the most descriptive contextual heading or a summary of the activity (e.g., "Praktika im Rahmen des Studiums" or "diverse Büro- und Programmiertätigkeiten") to ensure this field is always populated.
-- If no position is mentioned, use an empty string `""`.
+- **Strict Filtering:** Extract ONLY from CVs. 
+- **Mandatory `company_organization`:** Every entry MUST have a value. If no formal company name is found, use the descriptive context (e.g., "Praktika im Rahmen des Studiums", "diverse Büro-Tätigkeiten"). **Never skip a station because a formal company name is missing.**
+- **Semantic Field Mapping (CRITICAL):**
+    - `description`: High-level context, industry, or sector (e.g., "IT Consulting", "Personaldienstleistungen").
+    - `responsibilities`: Formal duties and professional obligations (e.g., "Team leadership", "Budget planning", "Requirements engineering").
+    - `own_activities`: Specific, actionable implementations and technical tasks (e.g., "Developed a plugin in C#", "Implemented an Odoo migration", "Conducted workshops").
+- **Identify `open_questions`:** Actively flag missing dates, ambiguous roles, or data gaps to facilitate better data quality (e.g., "Missing employment_end for Station X").
+- **Preserve Language & Wording:** Use exact original wording from the source.
+- If no position is found, use "".
 
 # Output Format
 Return a single JSON object following this schema:

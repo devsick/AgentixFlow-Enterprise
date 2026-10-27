@@ -178,7 +178,7 @@ class ExtractCertificatesAgentNode:
                     "expected a dictionary."
                 )
 
-            content = result.get("content")
+            content = result.get("markdown")
             open_questions = result.get("open_questions", [])
 
             if not isinstance(content, str) or not content.strip():

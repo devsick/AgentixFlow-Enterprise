@@ -98,9 +98,9 @@ class ExtractCertificatesAgent:
                 "LLM response must contain a JSON object."
             )
 
-        if not isinstance(result.get("content"), str):
+        if not isinstance(result.get("markdown"), str):
             raise ValueError(
-                "Agent response must contain a string field 'content'."
+                "Agent response must contain a string field 'markdown'."
             )
 
         if not isinstance(result.get("open_questions"), list):
@@ -117,7 +117,7 @@ class ExtractCertificatesAgent:
             )
 
         return {
-            "content": result["content"],
+            "markdown": result["markdown"],
             "open_questions": result["open_questions"],
         }
 

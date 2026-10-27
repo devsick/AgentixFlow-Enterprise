@@ -27,6 +27,7 @@ class ExtractSkillsAgentNode:
         "## Methods",
         "## Tools / Technologies",
         "## Languages",
+        "## Soft Skills",
         "## Other substantiated competencies",
     }
 

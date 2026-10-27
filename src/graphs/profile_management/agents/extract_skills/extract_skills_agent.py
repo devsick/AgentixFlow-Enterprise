@@ -87,9 +87,9 @@ class ExtractSkillsAgent:
         if not isinstance(result, dict):
             raise ValueError("Agent response must be a JSON object.")
 
-        if not isinstance(result.get("content"), str):
+        if not isinstance(result.get("markdown"), str):
             raise ValueError(
-                "Agent response must contain a string field 'content'."
+                "Agent response must contain a string field 'markdown'."
             )
 
         if not isinstance(result.get("open_questions"), list):
@@ -106,7 +106,7 @@ class ExtractSkillsAgent:
             )
 
         return {
-            "content": result["content"],
+            "content": result["markdown"],
             "open_questions": result["open_questions"],
         }
 
