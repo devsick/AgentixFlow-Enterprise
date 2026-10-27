@@ -25,20 +25,22 @@ class ExtractEmploymentAgent:
 
     EMPLOYMENT_STRING_FIELDS = (
         "company_organization",
-        "position",
         "employment_start",
         "employment_end",
-        "location",
+        "position",
         "employment_type",
-        "role",
+        "location",
+        "description",
     )
 
     EMPLOYMENT_LIST_FIELDS = (
         "responsibilities",
-        "tasks",
-        "results_and_successes",
+        "own_activities",
+        "skills",
         "methods_technologies",
         "stakeholders_collaboration",
+        "results",
+        "measurable_results",
         "sources",
         "notes",
         "open_questions",
@@ -227,12 +229,12 @@ class ExtractEmploymentAgent:
                     "has an empty 'company_organization'."
                 )
 
-            if not employment[
-                "position"
-            ].strip():
+            # Position is not strictly required to be non-empty.
+            # We allow empty strings if no position is found.
+            if not isinstance(employment.get("position"), str):
                 raise ValueError(
-                    f"Employment at index {index} "
-                    "has an empty 'position'."
+                    f"Employment at index {index}: "
+                    f"field 'position' must be a string."
                 )
 
             validated_employments.append(

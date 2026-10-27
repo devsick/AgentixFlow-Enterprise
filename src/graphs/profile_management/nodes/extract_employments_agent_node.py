@@ -37,15 +37,17 @@ class ExtractEmploymentAgentNode:
         "employment_end",
         "location",
         "employment_type",
-        "role",
+        "description",
     ]
 
     EMPLOYMENT_LIST_FIELDS = [
         "responsibilities",
-        "tasks",
-        "results_and_successes",
+        "own_activities",
+        "skills",
         "methods_technologies",
         "stakeholders_collaboration",
+        "results",
+        "measurable_results",
         "sources",
         "notes",
         "open_questions",
@@ -92,16 +94,18 @@ class ExtractEmploymentAgentNode:
             f"- Location: {entry['location']}",
             f"- Employment type: {entry['employment_type']}",
             "",
-            "## Role",
-            entry["role"].strip() or "None",
+            "## Description",
+            entry["description"].strip() or "None",
         ]
 
         rendered_fields = [
             ("Responsibilities", "responsibilities"),
-            ("Tasks", "tasks"),
-            ("Results and Successes", "results_and_successes"),
+            ("Own Activities", "own_activities"),
+            ("Skills", "skills"),
             ("Methods / Technologies", "methods_technologies"),
             ("Stakeholders / Collaboration", "stakeholders_collaboration"),
+            ("Results", "results"),
+            ("Measurable Results", "measurable_results"),
             ("Sources", "sources"),
             ("Notes", "notes"),
             ("Open Questions", "open_questions"),
@@ -111,7 +115,7 @@ class ExtractEmploymentAgentNode:
             sections.extend([
                 "",
                 f"## {heading}",
-                "\n".join(f"- {item}" for item in entry[field]) or "- None",
+                "\n".join(f"- {item}" for item in entry[field]) if isinstance(entry.get(field), list) and entry[field] else "- None",
             ])
 
         return "\n".join(sections).rstrip() + "\n"

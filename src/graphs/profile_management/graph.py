@@ -26,6 +26,9 @@ from src.graphs.profile_management.nodes.extract_employments_agent_node import (
 from src.graphs.profile_management.nodes.extract_certificates_agent_node import (
     ExtractCertificatesAgentNode,
 )
+from src.graphs.profile_management.nodes.extract_skills_agent_node import (
+    ExtractSkillsAgentNode,
+)
 
 def create_profile_management_graph():
     workflow = StateGraph(ProfileManagementState)
@@ -55,11 +58,15 @@ def create_profile_management_graph():
             })
     workflow.add_node("extract_employments", ExtractEmploymentAgentNode(), metadata={
                     "streaming_mode": "status_only",
-                })
+               })
     workflow.add_node("extract_certificates", ExtractCertificatesAgentNode(), metadata={
-                        "streaming_mode": "status_only",
-                    })
-  
+                       "streaming_mode": "status_only",
+                   })
+
+
+  #  workflow.add_node("extract_skills", ExtractSkillsAgentNode(), metadata={
+  #                          "streaming_mode": "status_only",
+  #                      })
     # --------------------------------------------------
     # 2. Einstieg und Orchestrator
     # --------------------------------------------------
@@ -97,13 +104,16 @@ def create_profile_management_graph():
     # --------------------------------------------------
 
     workflow.add_edge("detect_collective", "load_documents")
+   # workflow.add_edge("load_documents", "extract_certificates")
     workflow.add_edge("load_documents", "extract_employments")
+   #
    # workflow.add_edge("load_documents", "extract_persona")
    # workflow.add_edge("extract_persona","extract_projects")
    # workflow.add_edge("extract_projects","extract_employments")
-   # workflow.add_edge("extract_employments", "extract_certificates")
-   # workflow.add_edge("extract_certificates", END)
-    workflow.add_edge("extract_employments", END)
+    workflow.add_edge("extract_employments", "extract_certificates")
+   # workflow.add_edge("extract_certificates", "extract_skills")
+    workflow.add_edge("extract_certificates", END)
+   # workflow.add_edge("extract_skills", END)
 
     # --------------------------------------------------
     # 5. Graph kompilieren
