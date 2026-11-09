@@ -2,6 +2,7 @@ import asyncio
 from typing import Any, Dict, List, Optional, Callable, Awaitable
 from src.graphs.pure_chat.graph import create_pure_chat_graph
 from src.graphs.profile_management.graph import create_profile_management_graph
+from src.graphs.profile_maintenance.graph import create_profile_maintenance_graph
 
 class GraphRegistry:
     """Registriert und verwaltet verfügbare LangGraph-Instanzen als 'Modelle'."""
@@ -32,7 +33,11 @@ async def pure_chat_factory():
 async def profile_management_factory():
     return create_profile_management_graph()
 
+async def profile_maintenance_factory():
+    return create_profile_maintenance_graph()
+
 # Wir registrieren die Graphen hier.
 # Da die Registry global ist, wird dies beim Import der API-Module ausgeführt.
 registry.register_model("pure-chat", pure_chat_factory)
 registry.register_model("profile-management", profile_management_factory)
+registry.register_model("profile-maintenance", profile_maintenance_factory)

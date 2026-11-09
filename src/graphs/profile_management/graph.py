@@ -104,15 +104,11 @@ def create_profile_management_graph():
     # --------------------------------------------------
 
     workflow.add_edge("detect_collective", "load_documents")
-   # workflow.add_edge("load_documents", "extract_certificates")
-    workflow.add_edge("load_documents", "extract_employments")
-   #
-   # workflow.add_edge("load_documents", "extract_persona")
-   # workflow.add_edge("extract_persona","extract_projects")
-   # workflow.add_edge("extract_projects","extract_employments")
+    workflow.add_edge("load_documents", "extract_persona")
+    workflow.add_edge("extract_persona","extract_projects")
+    workflow.add_edge("extract_projects","extract_employments")
     workflow.add_edge("extract_employments", "extract_certificates")
     workflow.add_edge("extract_certificates", "extract_skills")
-   # workflow.add_edge("extract_certificates", END)
     workflow.add_edge("extract_skills", END)
 
     # --------------------------------------------------
