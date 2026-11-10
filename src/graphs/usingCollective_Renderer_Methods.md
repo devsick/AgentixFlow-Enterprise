@@ -1,45 +1,45 @@
-# `collective_functions.py` – Architektur und Verwendung von Callbacks
+# `collective_functions.py` – Architecture and usage of callbacks
 
-## 1. Zweck dieser Datei
+## 1. Purpose of this file
 
-`collective_functions.py` enthält die gemeinsame Logik für den Import von Einträgen in ein Collective.
+`collective_functions.py` contains the common logic for importing entries into a Collective.
 
-Die Datei soll unabhängig davon funktionieren, welche Art von Daten importiert wird. Sie kennt beispielsweise weder die fachliche Struktur eines Projekts noch die einer Beschäftigung.
+The file is designed to function independently of the type of data being imported. For example, it knows neither the domain structure of a project nor that of an employment.
 
-Die jeweilige Node legt fest:
+The respective Node defines:
 
-- welche Daten importiert werden,
-- welche Felder für die Validierung relevant sind,
-- wie der Name eines Eintrags gebildet wird,
-- wie eine einzelne Eintragsseite als Markdown dargestellt wird,
-- welche Konfiguration für den Import verwendet wird.
+- which data is imported,
+- which fields are relevant for validation,
+- how an entry's name is formed,
+- how a single entry page is represented as Markdown,
+- which configuration is used for the import.
 
-`collective_functions.py` übernimmt anschließend die gemeinsame Verarbeitung:
+`collective_functions.py` then takes over the common processing:
 
-- Konfiguration prüfen,
-- Einträge validieren,
-- Overview-Seite suchen oder erstellen,
-- Eintragsnamen über den konfigurierten Callback ermitteln,
-- Seitentitel zusammensetzen,
-- vorhandene Seiten suchen oder neue Seiten erstellen,
-- Markdown-Inhalte schreiben und überprüfen,
-- Ergebnisse und Fehler zurückgeben.
+- checking configuration,
+- validating entries,
+- searching for or creating an overview page,
+- determining entry names via the configured callback,
+- composing page titles,
+- searching for existing pages or creating new pages,
+- writing and verifying Markdown content,
+- returning results and errors.
 
-**Grundprinzip:** Die Node beschreibt die fachlichen Besonderheiten. `collective_functions.py` steuert den allgemeinen Importablauf.
+**Basic principle:** The Node describes the domain-specific details. `collective_functions.py` controls the general import process.
 
 ---
 
-## 2. Das Prinzip der Callback-Funktionen
+## 2. The principle of callback functions
 
-Ein Callback ist eine Funktion, die nicht unmittelbar ausgeführt, sondern zunächst an eine andere Funktion übergeben wird. Diese andere Funktion ruft sie später bei Bedarf auf.
+A callback is a function that is not executed immediately, but is first passed to another function. This other function calls it later when needed.
 
-In diesem Projekt werden die Callback-Funktionen über `CollectiveConfig` übergeben.
+In this project, the callback functions are passed via `CollectiveConfig`.
 
-Das ist wichtig, weil `import_collective_entries()` nicht wissen muss, welche konkrete Node den Import ausgelöst hat.
+This is important because `import_collective_entries()` does not need to know which specific Node triggered the import.
 
-### Beispiel: Projects-Node
+### Example: Projects Node
 
-In `extract_project_agent_node.py` wird die Konfiguration beispielsweise so erstellt:
+In `extract_project_agent_node.py`, the configuration is created, for example, like this:
 
 ```python
 config = CollectiveConfig(
@@ -57,20 +57,20 @@ config = CollectiveConfig(
 )
 ```
 
-Die entscheidenden Zeilen sind:
+The crucial lines are:
 
 ```python
 get_entry_name=self._project_name,
 render_entry=self._render_project_markdown,
 ```
 
-Hier werden die Methoden als Funktionsreferenzen übergeben.
+Here, the methods are passed as function references.
 
-Es steht dort bewusst **kein Klammerpaar hinter dem Methodennamen**. Die Funktionen sollen an dieser Stelle noch nicht ausgeführt werden.
+Note that there are **deliberately no parentheses after the method name**. The functions should not be executed at this point.
 
-### Beispiel: Employments-Node
+### Example: Employments Node
 
-Die Employments-Node verwendet dieselbe gemeinsame Importfunktion, übergibt aber andere Callbacks:
+The Employments Node uses the same common import function, but passes different callbacks:
 
 ```python
 config = CollectiveConfig(
@@ -88,13 +88,13 @@ config = CollectiveConfig(
 )
 ```
 
-Damit erhält `collective_functions.py` für Beschäftigungen andere Funktionen als für Projekte, ohne dass dort eine Unterscheidung zwischen diesen Datentypen notwendig ist.
+This way, `collective_functions.py` receives different functions for employments than for projects, without requiring a distinction between these data types within the common function.
 
 ---
 
-## 3. Ablauf beim Aufruf von `import_collective_entries()`
+## 3. Process when calling `import_collective_entries()`
 
-Die Node ruft die gemeinsame Importfunktion auf:
+The Node calls the common import function:
 
 ```python
 imported = await import_collective_entries(
@@ -105,9 +105,9 @@ imported = await import_collective_entries(
 )
 ```
 
-Bei Beschäftigungen wird entsprechend `entries=raw_employments` übergeben.
+For employments, `entries=raw_employments` is passed accordingly.
 
-Der Ablauf innerhalb der gemeinsamen Importfunktion ist vereinfacht:
+The process within the common import function is simplified:
 
 ```python
 validated_entries = validate_entries(entries, config)
@@ -128,70 +128,70 @@ for index, entry in enumerate(validated_entries):
 
     content = config.render_entry(entry, config)
 
-    # Anschließend:
-    # - vorhandene Seite suchen oder neue Seite erstellen
-    # - Seite aktualisieren
-    # - Markdown schreiben und überprüfen
+    # Subsequently:
+    # - search for existing page or create new page
+    # - update page
+    # - write and verify Markdown
 ```
 
-Dieses Beispiel verdeutlicht das Callback-Prinzip. Die eigentliche Funktion enthält zusätzlich Fehlerbehandlung, Logging und weitere Verarbeitungsschritte.
+This example illustrates the callback principle. The actual function also includes error handling, logging, and further processing steps.
 
-### Was passiert beim Namens-Callback?
+### What happens during the name callback?
 
-Bei dieser Zeile:
+At this line:
 
 ```python
 entry_name = config.get_entry_name(entry)
 ```
 
-wird der Callback tatsächlich ausgeführt.
+the callback is actually executed.
 
-- Bei Projects wird `_project_name(entry)` aufgerufen.
-- Bei Employments wird `_employment_name(entry)` aufgerufen.
+- For Projects, `_project_name(entry)` is called.
+- For Employments, `_employment_name(entry)` is called.
 
-Welche Funktion aufgerufen wird, steht bereits in der Konfiguration der jeweiligen Node.
+Which function is called is already specified in the configuration of the respective Node.
 
-Die gemeinsame Importfunktion muss deshalb weder den Klassennamen der Node prüfen noch Bedingungen wie `if project` oder `if employment` enthalten.
+Therefore, the common import function does not need to check the class name of the Node or contain conditions like `if project` or `if employment`.
 
-### Was passiert beim Markdown-Callback?
+### What happens during the Markdown callback?
 
-Bei dieser Zeile:
+At this line:
 
 ```python
 content = config.render_entry(entry, config)
 ```
 
-wird der konfigurierte Markdown-Renderer ausgeführt.
+the configured Markdown renderer is executed.
 
-- Bei Projects soll `_render_project_markdown()` die Projektseite erzeugen.
-- Bei Employments soll `_render_employment_markdown()` die Beschäftigungsseite erzeugen.
+- For Projects, `_render_project_markdown()` should generate the project page.
+- For Employments, `_render_employment_markdown()` should generate the employment page.
 
-**Wichtig:** Der aktuelle Aufruf übergibt zwei Argumente: `entry` und `config`. Die konfigurierte Renderer-Methode muss daher zu dieser Signatur passen.
+**Important:** The current call passes two arguments: `entry` and `config`. Therefore, the configured renderer method must match this signature.
 
 ---
 
-## 4. Verbindliche Schnittstellen der Callbacks
+## 4. Mandatory callback interfaces
 
-Damit neue Nodes zuverlässig mit `collective_functions.py` zusammenarbeiten, müssen die übergebenen Funktionen die erwarteten Argumente akzeptieren.
+In order for new Nodes to work reliably with `collective_functions.py`, the passed functions must accept the expected arguments.
 
 ### 4.1 `get_entry_name`
 
-Erwarteter Aufruf:
+Expected call:
 
 ```python
 entry_name = config.get_entry_name(entry)
 ```
 
-Erwartete Signatur:
+Expected signature:
 
 ```python
 def get_entry_name(entry: dict) -> str:
     ...
 ```
 
-Die Funktion erhält genau einen Eintrag und gibt dessen fachlichen Namen zurück.
+The function receives exactly one entry and returns its domain-specific name.
 
-Beispiel für Projekte:
+Example for Projects:
 
 ```python
 @staticmethod
@@ -204,7 +204,7 @@ def _project_name(entry: dict) -> str:
     return sanitize_page_name(name)
 ```
 
-Beispiel für Beschäftigungen:
+Example for Employments:
 
 ```python
 @staticmethod
@@ -221,24 +221,24 @@ def _employment_name(entry: dict) -> str:
     return sanitize_page_name(f"{name} ({start}-{end})")
 ```
 
-Die Beispiele verdeutlichen, dass die fachliche Namensbildung in der Node bleibt. Die gemeinsame Importfunktion muss diese Details nicht kennen.
+The examples illustrate that the domain-specific name formation remains in the Node. The common import function does not need to know these details.
 
 ### 4.2 `render_entry`
 
-Erwarteter Aufruf:
+Expected call:
 
 ```python
 content = config.render_entry(entry, config)
 ```
 
-Erwartete Signatur für eine normale Funktion:
+Expected signature for a normal function:
 
 ```python
 def render_entry(entry: dict, config: CollectiveConfig) -> str:
     ...
 ```
 
-Bei einer Instanzmethode muss zusätzlich der implizite Parameter `self` berücksichtigt werden:
+For an instance method, the implicit parameter `self` must also be taken into account:
 
 ```python
 def _render_entry(
@@ -249,76 +249,76 @@ def _render_entry(
     ...
 ```
 
-Bei einer `@staticmethod` sind nur die beiden expliziten Parameter erforderlich.
+For a `@staticmethod`, only the two explicit parameters are required.
 
-**Achtung bei `@classmethod`:** Eine Klassenmethode erhält zusätzlich den impliziten Parameter `cls`. Eine Methode mit der Signatur `def _render_project_markdown(cls, entry)` akzeptiert deshalb nicht automatisch den aktuellen Aufruf mit `entry` und `config`. Die Signaturen müssen zusammenpassen.
+**Caution with `@classmethod`:** A class method also receives the implicit parameter `cls`. A method with the signature `def _render_project_markdown(cls, entry)` will therefore not automatically accept the current call with `entry` and `config`. The signatures must match.
 
 ### 4.3 `render_overview`
 
-Die Konfiguration kann auch einen Callback für die Overview-Darstellung enthalten:
+The configuration can also contain a callback for the overview representation:
 
 ```python
 render_overview=self._render_overview_markdown,
 ```
 
-Die gewünschte Schnittstelle hängt davon ab, wie der Callback verwendet wird. Die bisher gezeigte Methode erwartet:
+The desired interface depends on how the callback is used. The method shown so far expects:
 
 ```python
 def _render_overview_markdown(entries: list[dict]) -> str:
     ...
 ```
 
-**Aktueller Implementierungsstand:** In der bisher gezeigten Version von `import_collective_entries()` wird `config.render_overview` nicht aufgerufen. Die Angabe in der Konfiguration allein führt noch nicht dazu, dass der Overview-Inhalt gerendert oder geschrieben wird.
+**Current implementation status:** In the version of `import_collective_entries()` shown so far, `config.render_overview` is not called. Specifying it in the configuration alone does not yet cause the overview content to be rendered or written.
 
-Dieser Callback sollte deshalb nicht mit der tatsächlich ausgeführten Eintragsseiten-Renderfunktion verwechselt werden.
+This callback should therefore not be confused with the actual entry page rendering function that is executed.
 
 ---
 
-## 5. Bedeutung der übrigen Konfigurationsfelder
+## 5. Meaning of the other configuration fields
 
-Die folgenden Felder beschreiben den Import und werden nicht mit Callback-Funktionen verwechselt.
+The following fields describe the import and are not to be confused with callback functions.
 
-| Konfigurationsfeld | Bedeutung |
+| Configuration field | Meaning |
 |---|---|
-| `mode` | Legt den vorgesehenen Importmodus fest. |
-| `overview_title` | Titel der übergeordneten Overview-Seite. |
-| `entry_prefix` | Präfix für die Seitentitel der Einträge. |
-| `first_entry_number` | Erste laufende Nummer der Einträge. |
-| `scalar_fields` | Namen der Felder mit einzelnen Werten. |
-| `list_fields` | Namen der Felder mit Listenwerten. |
-| `get_entry_name` | Callback zur Ermittlung des Eintragsnamens. |
-| `render_entry` | Callback zur Erstellung des Markdown-Inhalts einer Eintragsseite. |
-| `render_overview` | Vorgesehener Callback zur Erstellung des Overview-Markdowns. |
-| `graph_id` | Kontext für Graph-/Node-Monitoring. |
-| `run_id` | Kontext für die Zuordnung zu einem Lauf. |
+| `mode` | Sets the intended import mode. |
+| `overview_title` | Title of the parent overview page. |
+| `entry_prefix` | Prefix for the entry page titles. |
+| `first_entry_number` | First running number of the entries. |
+| `scalar_fields` | Names of fields with single values. |
+| `list_fields` | Names of fields with list values. |
+| `get_entry_name` | Callback for determining the entry name. |
+| `render_entry` | Callback for creating the Markdown content of an entry page. |
+| `render_overview` | Intended callback for creating the overview Markdown. |
+| `graph_id` | Context for graph/node monitoring. |
+| `run_id` | Context for assignment to a run. |
 
-`scalar_fields` und `list_fields` beschreiben die erwartete Datenstruktur. Sie bestimmen nicht automatisch die Überschriften oder die Reihenfolge der Abschnitte im Markdown. Diese Gestaltung erfolgt im jeweiligen Renderer.
+`scalar_fields` and `list_fields` describe the expected data structure. They do not automatically determine the headings or the order of sections in the Markdown. This design is handled in the respective renderer.
 
 ---
 
-## 6. Regeln für neue Nodes
+## 6. Rules for new Nodes
 
-Wenn eine neue Node dieselbe Importfunktion verwenden soll, gelten folgende Regeln.
+If a new Node is to use the same import function, the following rules apply.
 
-1. **Eigene Datenfelder definieren.**  
-   Die Node legt ihre `scalar_fields` und `list_fields` entsprechend dem Datenschema fest.
+1. **Define own data fields.**  
+   The Node sets its `scalar_fields` and `list_fields` according to the data schema.
 
-2. **Eigenen Namens-Callback bereitstellen.**  
-   Die Methode muss einen einzelnen Eintrag entgegennehmen und einen passenden Namen zurückgeben.
+2. **Provide own name callback.**  
+   The method must accept a single entry and return a suitable name.
 
-3. **Eigenen Markdown-Renderer bereitstellen.**  
-   Die Methode erstellt den vollständigen Markdown-Inhalt einer einzelnen Eintragsseite und muss die von `collective_functions.py` verwendete Signatur akzeptieren.
+3. **Provide own Markdown renderer.**  
+   The method creates the complete Markdown content of a single entry page and must accept the signature used by `collective_functions.py`.
 
-4. **Callbacks in `CollectiveConfig` hinterlegen.**  
-   Die Funktionsreferenzen werden ohne aufrufende Klammern übergeben.
+4. **Store callbacks in `CollectiveConfig`.**  
+   The function references are passed without calling parentheses.
 
-5. **Gemeinsame Importfunktion aufrufen.**  
-   Die Node übergibt Client, Collective-ID, Einträge und Konfiguration an `import_collective_entries()`.
+5. **Call the common import function.**  
+   The Node passes the client, collective ID, entries, and configuration to `import_collective_entries()`.
 
-6. **Keine fachlichen Sonderfälle in `collective_functions.py` ergänzen.**  
-   Änderungen an der fachlichen Namensbildung oder am individuellen Markdown-Layout gehören grundsätzlich in die jeweilige Node. Die gemeinsame Importfunktion bleibt für den Importablauf verantwortlich.
+6. **Do not add domain-specific special cases to `collective_functions.py`.**  
+   Changes to the domain-specific name formation or individual Markdown layout belong fundamentally in the respective Node. The common import function remains responsible for the import process.
 
-Beispiel für das Muster:
+Example of the pattern:
 
 ```python
 config = CollectiveConfig(
@@ -343,63 +343,57 @@ result = await import_collective_entries(
 )
 ```
 
-Die Namen der Konstanten und Methoden sind hier Platzhalter und müssen zur jeweiligen Node passen.
+The names of the constants and methods here are placeholders and must match the respective Node.
 
 ---
 
-## 7. Häufige Fehlerquellen
+## 7. Common sources of error
 
-### Callback wird versehentlich ausgeführt
+### Callback accidentally executed
 
-Falsch:
+Wrong:
 
 ```python
 get_entry_name=self._project_name(entry)
 ```
 
-Hier würde die Methode bereits beim Erstellen der Konfiguration aufgerufen. Außerdem ist `entry` an dieser Stelle möglicherweise noch gar nicht verfügbar.
+Here, the method would be called already when creating the configuration. Furthermore, `entry` might not even be available at this point.
 
-Richtig:
+Right:
 
 ```python
 get_entry_name=self._project_name
 ```
 
-Die Methode wird erst später von `collective_functions.py` aufgerufen.
+The method is only called later by `collective_functions.py`.
 
-### Callback-Signatur passt nicht
+### Callback signature does not match
 
-Wenn der Aufrufer zwei Argumente übergibt, die Funktion aber nur eines akzeptiert, entsteht ein `TypeError`.
+If the caller passes two arguments, but the function only accepts one, a `TypeError` occurs.
 
-Daher immer den tatsächlichen Aufruf in `collective_functions.py` mit der Methodensignatur in der Node abgleichen.
+Therefore, always compare the actual call in `collective_functions.py` with the method signature in the Node.
 
-### Seitentitel werden doppelt oder an der falschen Stelle bereinigt
+### Page titles are cleaned twice or in the wrong place
 
-Die Namens-Callbacks sollten die fachlichen Eintragsnamen bereinigen, wenn dies Teil ihrer vorgesehenen Aufgabe ist. Andere Titel, beispielsweise Overview-Titel, können einen separaten Bereinigungspfad benötigen.
+The name callbacks should clean the domain-specific entry names if this is part of their intended task. Other titles, for example overview titles, may require a separate cleaning path.
 
-### Konfiguration allein führt keine Funktion aus
+### Configuration alone does not execute a function
 
-Das Hinterlegen von
+Specifying
 
 ```python
 render_overview=self._render_overview_markdown
 ```
 
-führt die Methode nicht aus. Der entsprechende Callback muss später ausdrücklich aufgerufen werden.
+does not execute the method. The corresponding callback must be explicitly called later.
 
 ---
 
-## 8. Zusammenfassung
+## 8. Summary
 
-Die Architektur beruht auf einer klaren Aufgabenteilung:
+The architecture is based on a clear division of tasks:
 
-- **Node:** Kennt die fachlichen Daten und definiert die passenden Callbacks.
-- **`CollectiveConfig`:** Transportiert die Funktionsreferenzen und die Importparameter.
-- **`collective_functions.py`:** Ruft die Callbacks an den vorgesehenen Stellen auf und steuert den gemeinsamen Importprozess.
-- **`collective_pages.py`:** Stellt Funktionen für das Suchen, Erstellen und Verwalten der Collective-Seiten bereit.
-
-Die entscheidende Idee lautet:
-
-**Die gemeinsame Importfunktion muss nicht wissen, welche konkrete Node sie aufgerufen hat. Sie verwendet die Funktionen, die ihr die Node über `CollectiveConfig` übergeben hat.**
-
-Dadurch können weitere Nodes denselben Importablauf nutzen, ohne dass `collective_functions.py` für jeden neuen Datentyp angepasst werden muss.
+- **Node:** Knows the domain data and defines the appropriate callbacks.
+- **`CollectiveConfig`:** Transports the function references and the import parameters.
+- **`collective_functions.py`:** Calls the callbacks at the intended locations and controls the common import process.
+- **`collective_pages.py`:** Provides functions for searching, creating, and managing Collective pages.

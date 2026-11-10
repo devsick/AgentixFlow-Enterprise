@@ -9,11 +9,11 @@ from src.settings.config_store import config_store
 
 class FirecrawlMCPClient:
     """
-    MCP-Client für Firecrawl über Streamable HTTP.
+    MCP Client for Firecrawl via Streamable HTTP.
 
-    Der Client hält seine MCP-Session während seiner Lebensdauer offen.
-    Handshake, Session-ID, Protokollheader und Transport werden vom
-    offiziellen MCP-Python-SDK verwaltet.
+    The client keeps its MCP session open for its lifetime.
+    Handshake, session ID, protocol headers, and transport are managed by
+    the official MCP Python SDK.
     """
 
     def __init__(self, allowed_tools: List[str]):
@@ -32,7 +32,7 @@ class FirecrawlMCPClient:
         self._connected = False
 
     async def _ensure_connected(self) -> None:
-        """Öffnet den Transport und initialisiert die MCP-Session einmalig."""
+        """Opens the transport and initializes the MCP session once."""
 
         if self._connected and self._session is not None:
             return
@@ -49,7 +49,7 @@ class FirecrawlMCPClient:
             session = ClientSession(read_stream, write_stream)
             await stack.enter_async_context(session)
 
-            # MCP-Handshake; das SDK verwaltet die Protokollinitialisierung.
+            # MCP handshake; the SDK manages the protocol initialization.
             await session.initialize()
 
             self._exit_stack = stack
@@ -74,10 +74,10 @@ class FirecrawlMCPClient:
         params: Dict[str, Any],
     ) -> Any:
         """
-        Kompatibilitätsmethode für den bisherigen Client-Aufbau.
+        Compatibility method for the previous client setup.
 
-        Unterstützt tools/list und tools/call. Die MCP-Kommunikation selbst
-        erfolgt über ClientSession und nicht über selbst gebaute HTTP-POSTs.
+        Supports tools/list and tools/call. MCP communication itself
+        takes place via ClientSession and not via custom-built HTTP POSTs.
         """
 
         await self._ensure_connected()
@@ -99,7 +99,7 @@ class FirecrawlMCPClient:
         raise NotImplementedError(f"Method {method} not implemented.")
 
     async def close(self) -> None:
-        """Schließt die Session und den ExitStack sauber."""
+        """Closes the session and ExitStack cleanly."""
         if self._exit_stack:
             await self._exit_stack.aclose()
             self._exit_stack = None

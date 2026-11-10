@@ -8,8 +8,8 @@ from typing import Any, Dict
 
 class MonitoringWriter:
     """
-    Schreibt Laufzeitdaten eines Graphen in das Filesystem.
-    Struktur: backend/src/monitoring_runs/{graph_id}/{run_id}/
+    Writes graph runtime data to the filesystem.
+    Structure: backend/src/monitoring_runs/{graph_id}/{run_id}/
     """
 
     def __init__(self, base_dir: str = "/app/monitoring_runs"):
@@ -19,7 +19,7 @@ class MonitoringWriter:
         return self.base_dir / graph_id / run_id
 
     async def initialize_run(self, graph_id: str, run_id: str, initial_meta: Dict[str, Any]):
-        """Initialisiert das Verzeichnis und schreibt die meta.json."""
+        """Initializes the directory and writes the meta.json."""
         run_dir = self._get_run_dir(graph_id, run_id)
         run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -35,7 +35,7 @@ class MonitoringWriter:
             await f.write(json.dumps(meta_data, indent=2))
 
     async def write_state(self, graph_id: str, run_id: str, state: Dict[str, Any]):
-        """Schreibt einen Snapshot des States in die state.json (atomar via rename)."""
+        """Writes a snapshot of the state to state.json (atomically via rename)."""
         run_dir = self._get_run_dir(graph_id, run_id)
         state_path = run_dir / "state.json"
         temp_path = run_dir / "state.json.tmp"
@@ -43,11 +43,12 @@ class MonitoringWriter:
         async with aiofiles.open(temp_path, mode='w', encoding='utf-8') as f:
             await f.write(json.dumps(state, indent=2))
         
-        # Atomarer Replace
+        # Atomic replace
+
         os.replace(temp_path, state_path)
 
     async def log_event(self, graph_id: str, run_id: str, event_type: str, details: Dict[str, Any]):
-        """Schreibt ein Event in die events.jsonl."""
+        """Writes an event to events.jsonl."""
         run_dir = self._get_run_dir(graph_id, run_id)
         events_path = run_dir / "events.jsonl"
 
@@ -60,5 +61,5 @@ class MonitoringWriter:
         async with aiofiles.open(events_path, mode='a', encoding='utf-8') as f:
             await f.write(json.dumps(event_entry) + "\n")
 
-# Singleton für die Anwendung
+# Singleton for the application
 monitoring_writer = MonitoringWriter()

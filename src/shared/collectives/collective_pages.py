@@ -18,7 +18,7 @@ async def _log_page_event(
     phase: str,
     **details: Any,
 ) -> None:
-    """Schreibt ein High-Level-Event mit run_id und graph_id ins Monitoring."""
+    """Writes a high-level event with run_id and graph_id to monitoring."""
     if config is None:
         return
 
@@ -39,7 +39,7 @@ async def get_collective_pages(
     collective_id: str | int,
     config: CollectiveConfig | None = None,
 ) -> list[dict]:
-    """Ruft alle Seiten eines Collectives ab und protokolliert den Vorgang."""
+    """Fetches all pages of a Collective and logs the process."""
     operation = "get_collective_pages"
 
     await _log_page_event(
@@ -89,7 +89,7 @@ async def create_collective_page(
     title: str,
     config: CollectiveConfig | None = None,
 ) -> Any:
-    """Erstellt eine Collective-Seite und protokolliert das Ergebnis."""
+    """Creates a Collective page and logs the result."""
     operation = "create_collective_page"
 
     arguments = {
@@ -149,7 +149,7 @@ async def refresh_created_page(
     delay_seconds: float = 0.5,
     config: CollectiveConfig | None = None,
 ) -> dict | None:
-    """Lädt eine Seite erneut, falls sie noch nicht verfügbar ist."""
+    """Reloads a page if it is not yet available."""
     operation = "refresh_created_page"
     attempts = max(1, retries)
 
@@ -174,8 +174,8 @@ async def refresh_created_page(
                 },
             )
 
-            # Die MCP-Antwort kann die Seitendaten direkt oder in "page"
-            # enthalten. Beide üblichen Formen werden unterstützt.
+            # The MCP response may contain the page data directly or in "page".
+            # Both common forms are supported.
             if isinstance(response, dict):
                 page = response.get("page")
                 if isinstance(page, dict):
@@ -204,7 +204,7 @@ async def refresh_created_page(
                 collective_id=str(collective_id),
                 page_id=str(page_id_value),
                 attempt=attempt,
-                reason="Die Antwort enthielt keine erkennbaren Seitendaten.",
+                reason="The response contained no recognizable page data.",
             )
 
         except Exception as exc:
@@ -242,7 +242,7 @@ async def refresh_created_page(
         collective_id=str(collective_id),
         page_id=str(page_id_value),
         attempts=attempts,
-        error="Die Seite war nach allen Versuchen nicht verfügbar.",
+        error="The page was not available after all attempts.",
     )
 
     return None
@@ -255,7 +255,7 @@ async def ensure_page(
     parent_id: str | int,
     config: CollectiveConfig | None = None,
 ) -> dict:
-    """Findet eine Seite oder erstellt sie und lädt sie erneut."""
+    """Finds a page or creates it and reloads it."""
     operation = "ensure_page"
 
     await _log_page_event(
@@ -318,8 +318,8 @@ async def ensure_page(
                 )
                 return refreshed
 
-        # Wenn die Erstellungsantwort selbst die Seitendaten enthält,
-        # diese zurückgeben. Andernfalls den fehlgeschlagenen Refresh melden.
+        # If the creation response itself contains the page data,
+        # return it. Otherwise, report the failed refresh.
         if isinstance(created, dict) and page_id(created) is not None:
             await _log_page_event(
                 config,
@@ -333,8 +333,8 @@ async def ensure_page(
             return created
 
         raise RuntimeError(
-            f"Die Collective-Seite {title!r} konnte nicht erstellt "
-            "oder erneut geladen werden."
+            f"The Collective page {title!r} could not be created "
+            "or reloaded."
         )
 
     except Exception as exc:
@@ -357,10 +357,10 @@ async def ensure_root_page(
     title: str,
     config: CollectiveConfig | None = None,
 ) -> dict:
-    """Stellt sicher, dass eine Seite unterhalb der Readme-Seite existiert.
+    """Ensures a page exists below the Readme page.
 
-    parent_id=0 wird hier bewusst nicht verwendet, da die API diesen Wert
-    beim Erstellen einer Seite nicht als gültigen Parent akzeptiert.
+    parent_id=0 is deliberately not used here because the API does not
+    accept this value as a valid parent when creating a page.
     """
     operation = "ensure_root_page"
 
@@ -393,16 +393,16 @@ async def ensure_root_page(
 
         if readme_page is None:
             raise RuntimeError(
-                f"Die Readme-/Startseite des Collectives "
-                f"{collective_id!r} konnte nicht gefunden werden."
-            )
+            f"The Readme/home page of the Collective "
+            f"{collective_id!r} could not be found."
+        )
 
         readme_id = page_id(readme_page)
 
         if not readme_id:
             raise RuntimeError(
-                f"Die Readme-/Startseite des Collectives "
-                f"{collective_id!r} hat keine gültige Seiten-ID."
+                f"The Readme/home page of the Collective "
+                f"{collective_id!r} does not have a valid page ID."
             )
 
         result = await ensure_page(
@@ -445,7 +445,7 @@ async def ensure_single_page(
     parent_id: str | int,
     config: CollectiveConfig | None = None,
 ) -> dict:
-    """Stellt sicher, dass eine einzelne Seite im Collective existiert."""
+    """Ensures that a single page exists in the Collective."""
     operation = "ensure_single_page"
 
     await _log_page_event(
@@ -493,7 +493,7 @@ async def ensure_single_page(
 
 
 def normalize_id(value: Any) -> str | None:
-    """Normalisiert eine ID oder extrahiert sie aus einem Objekt."""
+    """Normalizes an ID or extracts it from an object."""
     if value is None:
         return None
 
@@ -518,7 +518,7 @@ def get_value(
     *keys: str,
     default: Any = None,
 ) -> Any:
-    """Liest einen Wert aus einem Dictionary oder Objektattribut."""
+    """Reads a value from a dictionary or object attribute."""
     if isinstance(value, dict):
         for key in keys:
             if key in value and value[key] is not None:
@@ -558,7 +558,7 @@ def find_page_by_title(
     pages: list[dict],
     title: str,
 ) -> dict | None:
-    """Findet eine Seite anhand ihres Titels, ohne Groß-/Kleinschreibung."""
+    """Finds a page by its title, case-insensitive."""
     expected = title.strip().casefold()
 
     for page in pages:
@@ -572,7 +572,7 @@ def find_page_by_id(
     pages: list[dict],
     target_id: str | int,
 ) -> dict | None:
-    """Findet eine Seite anhand ihrer ID."""
+    """Finds a page by its ID."""
     expected = normalize_id(target_id)
 
     for page in pages:
@@ -583,7 +583,7 @@ def find_page_by_id(
 
 
 def parse_collective_id(value: Any) -> str | None:
-    """Normalisiert eine Collective-ID aus einem String oder Objekt."""
+    """Normalizes a Collective ID from a string or object."""
     if isinstance(value, dict):
         return normalize_id(value)
 
@@ -599,16 +599,16 @@ def sanitize_page_name(
     default: str = "New File",
     db4_byte_support: bool = True,
 ) -> str:
-    """Python-Äquivalent zu Nextcloud Collectives sanitiseFilename()."""
+    """Python equivalent to Nextcloud Collectives sanitizeFilename()."""
 
-    # '/' durch '-' ersetzen, um Pfadtrenner zu verhindern.
+    # Replace '/' with '-' to prevent path separators.
     name = name.replace("/", "-")
 
-    # Unter Windows unzulässige Zeichen entfernen.
+    # Remove characters invalid on Windows.
     name = name.translate(str.maketrans("", "", '*|\\:"<>?'))
 
-    # Falls die Datenbank kein 4-Byte-UTF-8 unterstützt,
-    # Unicode-Zeichen außerhalb der Basic Multilingual Plane entfernen.
+    # If the database does not support 4-byte UTF-8,
+    # remove Unicode characters outside the Basic Multilingual Plane.
     if not db4_byte_support:
         name = re.sub(
             r"[\U00010000-\U0010FFFF]",
@@ -616,7 +616,7 @@ def sanitize_page_name(
             name,
         )
 
-    # Führende und nachgestellte Leerzeichen und Punkte entfernen.
+    # Remove leading and trailing spaces and dots.
     name = name.strip(" .")
 
     # Fallback wie in der PHP-Funktion.

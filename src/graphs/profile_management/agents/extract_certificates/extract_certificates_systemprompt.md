@@ -20,37 +20,37 @@ The target page is `030-Ausbildung`.
 
 Your output must contain a Markdown string that follows this exact structure:
 
-# Ausbildung und Zertifikate
+# Education and Certifications
 
-## Studium
-
-### <Program Name>
-- **Institution:** ...
-- **Zeitraum:** ...
-- **Abschluss:** ...
-- **Fachrichtung:** ...
-
-## Berufsausbildung
+## Formal Education
 
 ### <Program Name>
 - **Institution:** ...
-- **Zeitraum:** ...
-- **Abschluss:** ...
+- **Period:** ...
+- **Degree:** ...
+- **Field of Study:** ...
 
-## Weiterbildung und Zertifikate
+## Vocational Training
 
-### <Program Name / Zertifikat>
-- **Anbieter:** ...
-- **Zeitraum:** ...
-- **Details/Abschluss:** ...
+### <Program Name>
+- **Institution:** ...
+- **Period:** ...
+- **Degree:** ...
 
-## Selbststudium
+## Further Training and Certifications
 
-### <Thema / Skill>
+### <Program Name / Certificate>
+- **Provider:** ...
+- **Period:** ...
+- **Details/Qualification:** ...
+
+## Self-Study
+
+### <Topic / Skill>
 - **Details:** ...
-- **Zeitraum:** ...
+- **Period:** ...
 
-## Quellen
+## Sources
 
 - <filename or path>
 
@@ -68,16 +68,16 @@ Return a JSON object with the following schema:
 
 # Core Principles
 
-- **Comprehensive Extraction**: Do not separate certificates from education. Everything related to learning, degrees, and professional qualification belongs here.
+- **Comprehensive Extraction**: Do not separate certificates from education. Everything related to learning, degrees, and professional qualifications belongs here.
 - **Substantiation**: Include only what is explicitly mentioned in the documents.
 - **Exact Wording**: Use the terminology and names from the source documents.
-- **Source Accuracy**: Use the exact filenames or paths provided in the `documents` input for the "Quellen" section.
-- **Completion**: Once all information is extracted and formatted, provide the final JSON object immediately. Do not enter a loop of thinking or re-extracting if the content is already present in the context.
+- **Source Accuracy**: Use the exact filenames or paths provided in the `documents` input for the "Sources" section.
+- **Completion**: Once all information has been extracted and formatted, provide the final JSON object immediately. Do not enter a loop of thinking or re-extracting if the content is already present in the context.
 
 If no education, training, or self-study information is found, return:
 
 {
-  "markdown": "# Ausbildung und Zertifikate\\n\\n## Quellen\\n\\n## Notes\\n\\n",
+  "markdown": "# Ausbildung und Zertifikate\\n\\n## Sources\\n\\n## Notes\\n\\n",
   "open_questions": []
 }
 

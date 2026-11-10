@@ -6,8 +6,8 @@ from src.shared.monitoring_writer import monitoring_writer
 
 def observe_node(node_name: str):
     """
-    Ein Decorator für LangGraph-Nodes, der den Lebenszyklus (Start, Ende, Fehler)
-    automatisch erfasst und in den State sowie in das Filesystem schreibt.
+    A decorator for LangGraph nodes that automatically captures the lifecycle (Start, End, Error)
+    and writes it to the State and the filesystem.
     """
     def decorator(func: Callable[..., Coroutine[Any, Any, Any]]):
         @functools.wraps(func)
@@ -24,17 +24,17 @@ def observe_node(node_name: str):
                 {"node": node_name, "timestamp": time.time()}
             )
             
-            # Update State (für die API/Streaming)
+            # Update State (for API/Streaming)
             if "metadata" not in state:
                 state["metadata"] = {}
             state["metadata"]["current_node"] = node_name
             state["metadata"]["node_status"] = "running"
 
             try:
-                # 2. Node Ausführung
+                # 2. Node execution
                 result = await func(self, state, *args, **kwargs)
 
-                # 3. Node Ende (Erfolg)
+                # 3. Node End (Success)
                 duration_ms = (time.perf_counter() - start_time) * 1000
                 await monitoring_writer.log_event(
                     graph_id, 
@@ -47,9 +47,9 @@ def observe_node(node_name: str):
                 state["metadata"]["node_status"] = "completed"
                 state["metadata"]["last_node_duration_ms"] = duration_ms
 
-                # Falls der Node ein Dictionary zurückgibt, muss es in den State gemerged werden
+                # If the node returns a dictionary, it has to be merged into the state
                 if isinstance(result, dict):
-                    # Wir geben das Result zurück, der Graph/LangGraph erledigt das Merging
+                    # Returning the result, the Graph/Langgraph does the merging
                     return result
                 return result
 
@@ -71,11 +71,11 @@ def observe_node(node_name: str):
                     error_details
                 )
 
-                # Update State für API/Streaming
+                # Update State for API/Streaming
                 state["metadata"]["node_status"] = "failed"
                 state["metadata"]["last_error"] = error_details
 
-                # Fehler weiterwerfen, damit der Graph das Routing (Error-Path) handhaben kann
+                # Raising the error, so the graph can handle the Routing correctly
                 raise e
 
         return wrapper

@@ -18,7 +18,7 @@ async def _log_storage_event(
     phase: str,
     **details: Any,
 ) -> None:
-    """Protokolliert eine Storage-Operation mit run_id und graph_id."""
+    """Is recording a storage-operation with run_id and graph_id."""
     if config is None:
         return
 
@@ -35,7 +35,7 @@ async def _log_storage_event(
 
 
 def get_collective_page_path(page: Any) -> PurePosixPath | None:
-    """Ermittelt den vollständigen Dateipfad einer Collective-Seite."""
+    """Determines the complete filepath of the collective page"""
     collective_path = get_page_value(
         page,
         "collectivePath",
@@ -74,7 +74,7 @@ def get_page_value(
     *keys: str,
     default: Any = None,
 ) -> Any:
-    """Liest einen Wert aus einem Dictionary oder Objektattribut."""
+    """Extracs the value from a dictionary or object property."""
     if isinstance(page, dict):
         for key in keys:
             if key in page and page[key] is not None:
@@ -89,7 +89,7 @@ def get_page_value(
 
 
 def extract_file_content(response: Any) -> str:
-    """Extrahiert den Dateiinhalt aus einer WebDAV-Antwort."""
+    """Extracts the file content from a webDav response"""
     if isinstance(response, str):
         return response
 
@@ -103,7 +103,7 @@ def extract_file_content(response: Any) -> str:
 
 
 def extract_etag(response: Any) -> str | None:
-    """Extrahiert den ETag aus direkten oder verschachtelten MCP-Antworten."""
+    """Extracts the ETag from the direct or nested mcp-responses"""
     if isinstance(response, str):
         try:
             response = json.loads(response)
@@ -113,7 +113,7 @@ def extract_etag(response: Any) -> str | None:
     if not isinstance(response, dict):
         return None
 
-    # Direkte WebDAV-Antwort oder structuredContent.
+    # Direct WebDAV response or structuredContent.
     for key in ("etag", "eTag", "ETag"):
         value = response.get(key)
         if value is not None and str(value).strip():
@@ -126,7 +126,7 @@ def extract_etag(response: Any) -> str | None:
             if etag:
                 return etag
 
-    # MCP-Tool-Antwort: content[0]["text"] enthält JSON.
+    # MCP-Tool response: content[0]["text"] contains JSON.
     content_items = response.get("content")
     if isinstance(content_items, list):
         for item in content_items:
@@ -153,7 +153,7 @@ async def read_markdown_file(
     path: str,
     config: CollectiveConfig | None = None,
 ) -> Any:
-    """Liest eine Datei über WebDAV im Markdown-Modus."""
+    """Reads a file with WebDav in markdown-format"""
     operation = "read_markdown_file"
 
     await _log_storage_event(
@@ -209,14 +209,14 @@ async def write_markdown_file(
     config: CollectiveConfig | None = None,
 ) -> Any:
     """
-    Schreibt Markdown unter Verwendung eines zuvor gelesenen ETags.
+    Writes Markdown using a previously read ETag.
 
-    Vor jedem Schreibversuch wird die aktuelle Datei gelesen. Der ETag
-    wird mit if_match übergeben, damit Änderungen zwischen Lesen und
-    Schreiben nicht unbemerkt überschrieben werden.
+    The current file is read before every write attempt. The ETag
+    is passed via if_match to ensure that changes between reading and
+    writing are not overwritten unnoticed.
 
-    Wenn die Datei nicht gelesen werden kann oder kein ETag vorliegt,
-    wird der Schreibvorgang abgebrochen.
+    If the file cannot be read or no ETag is available,
+    the write operation is aborted.
     """
     operation = "write_markdown_file"
 
@@ -230,7 +230,7 @@ async def write_markdown_file(
     )
 
     try:
-        # Immer zuerst den aktuellen Stand der Datei lesen.
+        # Always read the current state of the file first.
         read_response = await read_markdown_file(
             tools,
             path,
@@ -241,9 +241,9 @@ async def write_markdown_file(
 
         if not current_etag:
             raise RuntimeError(
-                f"Die Datei {path!r} wurde vor dem Schreiben gelesen, "
-                "aber die WebDAV-Antwort enthält keinen ETag. "
-                "Der Schreibvorgang wird aus Sicherheitsgründen abgebrochen."
+                f"The file {path!r} was read before writing, "
+                "but the WebDAV response does not contain an ETag. "
+                "The write operation is aborted for security reasons."
             )
 
         await _log_storage_event(
@@ -254,7 +254,7 @@ async def write_markdown_file(
             etag=current_etag,
         )
 
-        # Den aktuellen ETag als Schreibbedingung übergeben.
+        # Pass the current ETag as a write condition.
         response = await call_collective_tool(
             tools,
             "nc_webdav_write_file",
@@ -300,8 +300,8 @@ async def write_and_verify_markdown(
     config: CollectiveConfig | None = None,
 ) -> Any:
     """
-    Schreibt Markdown mit ETag-Prüfung und kontrolliert anschließend
-    den tatsächlich gespeicherten Inhalt durch erneutes Lesen.
+    Writes Markdown with ETag verification and subsequently verifies
+    the actually stored content by re-reading.
     """
     operation = "write_and_verify_markdown"
 
@@ -314,8 +314,8 @@ async def write_and_verify_markdown(
     )
 
     try:
-        # write_markdown_file liest unmittelbar vor dem Schreiben
-        # die Datei und übergibt ihren ETag als if_match.
+        # write_markdown_file reads the file immediately before writing
+        # and passes its ETag as if_match.
         write_response = await write_markdown_file(
             tools,
             path,
@@ -323,7 +323,7 @@ async def write_and_verify_markdown(
             config=config,
         )
 
-        # Anschließend den gespeicherten Stand erneut lesen.
+        # Subsequently re-read the stored state.
         read_response = await read_markdown_file(
             tools,
             path,
@@ -346,8 +346,8 @@ async def write_and_verify_markdown(
             )
 
             raise RuntimeError(
-                f"Die Markdown-Datei {path!r} wurde geschrieben, "
-                "aber die anschließende Inhaltsprüfung ist fehlgeschlagen."
+                f"The Markdown file {path!r} was written, "
+                "but the subsequent content verification failed."
             )
 
         await _log_storage_event(

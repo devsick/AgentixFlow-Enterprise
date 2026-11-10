@@ -71,7 +71,7 @@ class ResponseRequest(BaseModel):
     messages: List[ChatMessage]
     api_key: Optional[str] = None
     stream: Optional[bool] = False
-    # Conversations können über eine ID gesteuert werden (für zukünftiges State-Management)
+    # Conversations can be regulatet with the conversation_id (for future state-management)
     conversation_id: Optional[str] = None 
 
 class ResponseChoice(BaseModel):

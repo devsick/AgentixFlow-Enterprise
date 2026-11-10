@@ -1,172 +1,142 @@
-# Architecture Design: Transition from Single-Node to Multi-Agent Streaming Graph
+# Architecture Reference: Multi-Agent Streaming API
 
-This document describes the current (Ist) state of the backend architecture and the planned (Soll) architecture for implementing complex multi-agent workflows with token aggregation and intermediate streaming.
+This document serves as the official architectural reference for the **Flow-Agent-API**. It describes the current system design, which is built to facilitate complex, multi-agent workflows using **LangGraph** and **FastAPI**, providing an OpenAI-compatible interface with real-time streaming and hybrid observability.
 
 ---
 
-## 1. Current Architecture (Ist-Zustand)
+## 1. Architectural Pillars
 
-### Overview
-The current system is a lightweight backend designed to facilitate basic chat interactions. It utilizes **LangGraph** to manage stateful conversations and **FastAPI** (implied) to serve these interactions via a REST API. At its core, it is a "Single-Agent" system where a single node handles the LLM interaction and returns the result in a single, blocking response.
+The system is built upon four foundational pillars that enable high-performance agentic workflows.
 
-### Description
-- **Graph Structure**: A simple, linear workflow (`START` $\rightarrow$ `chat_node` $\rightarrow$ `END`).
-- **State Management**: Uses `PureChatState`, which stores a message list and basic metadata.
-- **Communication**: A standard **Request-Response** cycle. The client sends a request and waits (blocks) until the entire graph execution is finished before receiving any data.
+### A. Model Registry & Orchestration
+The system treats complex LangGraph workflows as "models." 
+- **Dynamic Registration**: Workflows are registered in `src/api/registry.py` using a factory pattern. This allows the API to instantiate the correct graph instance at runtime based on the user's request.
+- **Abstraction**: The complexity of flows, tool calls, and conditions is abstracted away, allowing the client to interact with a multi-agent graph as if it were a standard LLM model.
 
-### Diagrams
+### B. Real-Time Streaming Engine
+To provide a "live" experience, the system uses a **Continuous-Stream** model rather than a traditional request-response model.
+- **Event-Driven**: Using LangGraph's `astream_events`, the system captures granular lifecycle events (LLM streaming, tool calls, node transitions).
+- **Streaming Translation**: The `StreamingTranslator` (`src/api/streaming_translator.py`) intercepts these events and translates them into OpenAI-compatible Server-Sent Events (SSE).
+- **Rich Content**: The stream includes not just text, but also "reasoning/thinking" content and structured tool-call information in real-time.
 
-#### State Diagram (Current)
-Represents the lifecycle of a single graph execution.
-```mermaid
-stateDiagram-v2
-    [*] --> START
-    START --> chat_node : Invoke
-    chat_node --> END : Processed
-    END --> [*]
-```
+### C. Hybrid Observability
+The system implements a two-tier monitoring strategy to balance user experience with deep debugging capabilities.
+- **Hot Path (Client Feedback)**: Immediate, lightweight updates (e.g., "Agent X is thinking...") are streamed directly to the user via the API.
+- **Cold Path (Deep Analysis)**: Every execution is meticulously recorded in the `monitoring_runs/` directory. This includes `meta.json`, `state.json`, and `events.jsonl`, allowing for post-hoc analysis and debugging without adding latency to the live request.
+- **Automated Tracing**: The `observe_node` decorator handles the automatic capture of node lifecycles, metrics, and errors.
 
-#### Sequence Diagram (Current)
-Shows the synchronous flow of a single chat request.
+### D. State & Token Aggregation
+A unified state management system ensures consistency across multiple agent handoffs.
+- **Shared State**: Agents communicate through a shared state object (e.g., `MultiAgentState`).
+- **Automatic Token Aggregation**: Instead of manually tracking usage, the system uses a **Reducer function** (`sum_reducer`) within the state definition to automatically sum up `total_tokens` from every node interaction.
+
+---
+
+## 2. Communication Flow
+
+The following diagram illustrates the lifecycle of a single user request, from the initial API call to the final monitoring persistence.
+
 ```mermaid
 sequenceDiagram
-    participant C as Client
-    participant A as API
+    participant C as Client (User)
+    participant API as API (FastAPI)
+    participant REG as Registry
     participant G as Graph (LangGraph)
-    participant N as ChatNode
-
-    C->>A: POST /chat (Request)
-    A->>G: Run Graph
-    G->>N: Execute Node
-    N->>N: LLM Call & Token Count
-    N->>G: Return State Update
-    G->>A: Return Final State
-    A->>C: Response (JSON)
-```
-
----
-
-## 2. Transition & Implementation Progress
-
-### What is already implemented?
-- **Shared State Foundation**: Created `src/shared/states.py` containing `MultiAgentState`. This state is ready to support token aggregation via a custom reducer.
-- **LangGraph Core**: The environment is already configured to use `StateGraph` and `Annotated` types, which are essential for the future multi-agent implementation.
-- **Modular Node Structure**: The code is organized such that new nodes (Agents) can be added to the `graphs/` directory independently.
-
----
-
-## 3. Target Architecture (Soll-Zustand)
-
-### Overview
-The target architecture moves from a "Single-Response" model to a "Continuous-Stream" model. It allows multiple specialized agents to collaborate on a single task. The client perceives a live, ongoing process where they receive "thinking" updates from each agent, while the total token usage is transparently aggregated in the background.
-
-### Description
-- **Multi-Agent Orchestration**: A complex graph containing multiple specialized Agent Nodes.
-- **Token Aggregation**: Instead of returning individual token counts, the `State` uses a **Reducer function** to sum up `total_tokens` from every node automatically.
-- **Streaming (Non-blocking Updates)**: As each agent completes its step, it updates the State and emits an "Intermediate Event". The backend pushes these events (e.g., via SSE) to the client.
-- **Completion Logic**: The client request is only considered "finished" when the graph reaches the `END` node.
-
-### Core State Concept (The Token Reducer)
-The aggregation is handled by the `sum_reducer` defined in `src/shared/states.py`:
-```python
-total_tokens: Annotated[int, sum_reducer]
-```
-
-### Diagrams
-
-#### Sequence Diagram (Target: Streaming & Aggregation)
-Shows how the client receives updates *during* the execution without the request closing.
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant A as API (SSE/WebSocket)
-    participant G as Graph (Orchestrator)
-    participant A1 as Agent 1
-    participant A2 as Agent 2
+    participant MON as Monitoring (Cold Path)
     participant S as State (Shared)
 
-    C->>A: Open Connection (Request)
-    A->>G: Start Graph Run
+    C->>API: POST /chat/completions (model="my-agent")
+    API->>REG: get_model_factory("my-agent")
+    REG-->>API: factory_function
+    API->>G: Instantiate Graph (via factory)
     
-    Note over G, A1: Node 1 Execution
-    G->>A1: Execute
-    A1->>S: Update: messages + tokens_1
-    A1-->>A: [Event] Agent 1 Finished
-    A-->>C: [Stream] Agent 1 Update (Thinking/Status)
-
-    Note over G, A2: Node 2 Execution
-    G->>A2: Execute
-    A2->>S: Update: messages + tokens_2
-    A2-->>A: [Event] Agent 2 Finished
-    A-->>C: [Stream] Agent 2 Update (Thinking/Status)
-
-    Note over G, S: Finalization
-    G->>S: Final State Read (Summed Tokens)
-    G->>A: Return Complete State
-    A->>C: Final Response (Total Tokens + All Messages)
-```
-
-#### Communication Diagram (Target: Interaction Flow)
-Illustrates the relationship between the components and the flow of information.
-
-```mermaid
-graph TD
-    subgraph Client_Layer
-        C[Client]
+    Note over G, MON: Execution Loop (astream_events)
+    loop Graph Execution
+        G->>G: Node Execution (LLM/Tools)
+        G->>S: Update State (Messages + Tokens)
+        G->>MON: log_event (Node Start/End, Tool Call, LLM Chunk)
+        G-->>API: on_chat_model_stream (chunk)
+        API-->>C: [SSE Stream] OpenAI-Compatible Chunk
     end
 
-    subgraph API_Layer
-        A[API / Stream Handler]
-    end
-
-    subgraph Orchestration_Layer
-        G[LangGraph Orchestrator]
-        S[(Shared State)]
-    end
-
-    subgraph Agent_Layer
-        A1[Agent Node 1]
-        A2[Agent Node 2]
-        AN[Agent Node N]
-    end
-
-    C <-->|SSE / WebSockets| A
-    A <-->|Triggers/Sends| G
-    G <-->|Reads/Writes| S
-    G -->|Dispatches| A1
-    G -->|Dispatches| A2
-    G -->|Dispatches| AN
-    A1 -.->|Updates Tokens| S
-    A2 -.->|Updates Tokens| S
-    AN -.->|Updates Tokens| S
-    A1 -.->|Emit Event| A
-    A2 -.->|Emit Event| A
-    AN -.->|Emit Event| A
-```
-
-#### State Diagram (Target: Multi-Agent Flow)
-```mermaid
-stateDiagram-v2
-    [*] --> START
-    START --> Agent_1
-    Agent_1 --> Agent_2 : intermediate_event_1
-    Agent_2 --> Agent_N : intermediate_event_2
-    Agent_N --> END : final_event
-    END --> [*]
-    
-    note right of Agent_1 : Updates State: tokens += n
-    note right of Agent_2 : Updates State: tokens += m
+    G->>MON: log_event (Final State/Run Completion)
+    G-->>API: on_chain_end (Final State)
+    API-->>C: [SSE Stream] [DONE]
 ```
 
 ---
 
-## Summary Table
+## 3. Demonstration Models (Examples)
 
-| Feature | Current (Ist) | Target (Soll) |
+The following graphs are provided as reference implementations to demonstrate the framework's capabilities. They are not the primary product, but rather "test drivers" for the orchestration engine.
+
+| Model ID | Description | Focus |
 | :--- | :--- | :--- |
-| **Node Count** | Single Node | Multiple Specialized Agents |
-| **Token Handling** | Not tracked/Returned per call | **Aggregated** in State via Reducer |
-| **Client UX** | Waiting (Black Box) | **Streaming** (Continuous Feedback) |
-| **Request Life** | Ends after one response | Remains **Open** until Graph `END` |
-| **Data Transport** | Standard HTTP Response | Streaming (SSE / WebSockets) |
+| `pure-chat` | A basic, linear workflow. | Demonstrates standard request-response logic. |
+| `profile-management` | A multi-step stateful workflow. | Demonstrates complex state transitions and handoffs. |
+| `profile-maintenance` | A specialized maintenance agent. | Demonstrates task-specific orchestration. |
+| `anki` | An extensible agent for Anki integration. | Demonstrates how to expand existing tools (like Anki addons) with LLM reasoning and external tools (web search, etc.). |
+
+---
+
+## 4. Developer Guide: Creating a New Model
+
+To implement a new agentic workflow and expose it as a model, follow these steps.
+
+### Step 1: Configuration
+Update `src/config/config.json` to include any necessary new components:
+- Add new **MCP servers** if required.
+- Add or modify **LLM profiles** as needed.
+*Note: If adding a new MCP server, create a corresponding `mcp_client.py` in `src/tools/`.*
+
+### Step 2: Directory Structure
+Create a new directory for your graph under `src/graphs/<graph_name>/` following this pattern:
+```text
+src/graphs/graph_name/
+├── agents/        # Agent definitions and system prompts
+├── nodes/         # Individual node implementations
+├── state.py       # Defines the graph state (including reducers)
+└── graph.py        # Defines the LangGraph workflow (the orchestrator)
+```
+
+### Step 3: Implementation Standards
+- **State Management**: In `state.py`, define properties to store initialized MCP clients so they are accessible to any node via the state.
+- **MCP Initialization**: Implement an `mcp_initializer` node for every required MCP client. This node is responsible for initializing the client and saving it into the graph state.
+- **Node Standard**: Every node implementation must:
+    - Import `node_wrapper`.
+    - Use the `observe_node()` decorator to enable automated lifecycle monitoring.
+    - Import `monitoring_writer.py` if custom telemetry is required.
+- **Registration**: Register your new graph in `src/api/registry.py` to make it discoverable.
+
+```python
+# Example Registration in src/api/registry.py
+
+async def my_new_graph_factory():
+    return create_my_new_graph()
+
+registry.register_model("my-new-model", my_new_graph_factory)
+```
+
+---
+
+## 5. Future Roadmap
+
+The roadmap focuses on the evolution of the **Orchestration Framework** rather than specific agent types.
+
+*   **Standardized HITL Plumbing**: Implementation of a robust "Pause/Resume" mechanism for Human-in-the-Loop interactions. The framework handles the state suspension and API signaling, while the individual graph defines the context and approval content.
+*   **Automated Model Discovery (Plug-and-Play)**: Transitioning towards a "Zero-Config" registry where the framework automatically detects, validates, and registers new workflows based on directory structure and metadata.
+*   **Modular & Compliant Memory Service**: A centralized service providing long-term semantic memory. It will support a "Connector-based" architecture (allowing users to choose between SQLite, Chroma, Pinecone, etc.) and prioritize "Privacy-by-Design" (GDPR/Data-Anonymization compliance).
+*   **Automated Quality Assurance (QA)**: Tools for testing and validating agentic logic, ensuring reliability through automated evaluation of tool-call accuracy and state transitions.
+*   **Distributed Orchestration**: Enabling the transfer of complex business processes into agentic flows by supporting distributed execution across a decentralized mesh of nodes.
+
+---
+
+## 6. Summary of Key Components
+
+| Component | Responsibility |
+| :--- | :--- |
+| `src/api/registry.py` | Manages the mapping between model IDs and graph factories. |
+| `src/api/streaming_translator.py` | Converts LangGraph events into OpenAI-compatible SSE streams. |
+| `src/shared/states.py` | Defines shared states and token aggregation logic. |
+| `src/shared/monitoring_writer.py` | Handles file-based persistence of execution logs and state. |
+| `observe_node` decorator | Automatically traces node execution for the monitoring system. |

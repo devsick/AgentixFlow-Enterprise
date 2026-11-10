@@ -30,7 +30,7 @@ async def _log_function_event(
     phase: str,
     **details: Any,
 ) -> None:
-    """Schreibt ein High-Level-Event mit run_id und graph_id."""
+    """Writes a high-level event with run_id and graph_id."""
     if config is None:
         return
 
@@ -47,7 +47,7 @@ async def _log_function_event(
 
 
 def error_result(exc: Exception) -> dict:
-    """Erzeugt eine einheitliche Fehlerantwort."""
+    """Creates a uniform error response."""
     return {
         "success": False,
         "error": str(exc),
@@ -56,7 +56,7 @@ def error_result(exc: Exception) -> dict:
 
 
 def _get_readme_page(pages: list[dict]) -> dict | None:
-    """Findet die Readme-/Startseite eines Collectives."""
+    """Finds the Readme/home page of a Collective."""
     for page in pages:
         file_name = page.get("fileName") or page.get("file_name")
         parent_id = page.get("parentId", page.get("parent_id"))
@@ -79,14 +79,14 @@ async def import_collective_entries(
     config: CollectiveConfig | None = None,
 ) -> dict:
     """
-    Importiert strukturierte Einträge als einzelne Unterseiten.
+    Imports structured entries as individual subpages.
 
-    Die Übersichtsseite wird bei Bedarf angelegt.
-    Vorhandene Eintragsseiten werden aktualisiert.
-    Fehlende Eintragsseiten werden erstellt.
+    The overview page is created if necessary.
+    Existing entry pages are updated.
+    Missing entry pages are created.
 
-    Alle High-Level-Events werden über CollectiveConfig mit run_id
-    und graph_id protokolliert.
+    All high-level events are logged via CollectiveConfig with run_id
+    and graph_id.
     """
     config = config or CollectiveConfig()
     operation = "import_collective_entries"
@@ -108,26 +108,26 @@ async def import_collective_entries(
         if not isinstance(collective_id, (str, int)) or not str(
             collective_id
         ).strip():
-            raise ValueError("collective_id darf nicht leer sein.")
+            raise ValueError("collective_id must not be empty.")
 
         if not isinstance(entries, list):
-            raise TypeError("entries muss eine Liste sein.")
+            raise TypeError("entries must be a list.")
 
         tools = await load_collective_tools(client, config)
 
         if not config.overview_title or not config.overview_title.strip():
             raise ValueError(
-                "CollectiveConfig.overview_title darf nicht leer sein."
+                "CollectiveConfig.overview_title must not be empty."
             )
 
         if config.get_entry_name is None:
             raise ValueError(
-                "CollectiveConfig.get_entry_name ist nicht konfiguriert."
+                "CollectiveConfig.get_entry_name is not configured."
             )
 
         if config.render_entry is None:
             raise ValueError(
-                "CollectiveConfig.render_entry ist nicht konfiguriert."
+                "CollectiveConfig.render_entry is not configured."
             )
 
         await _log_function_event(
@@ -161,7 +161,7 @@ async def import_collective_entries(
             validation_error_count=len(validation_errors),
         )
 
-        # Alle Seiten abrufen und die Übersichtsseite suchen.
+        # Fetch all pages and search for the overview page.
         pages = await get_collective_pages(
             tools,
             collective_id=collective_id,
@@ -178,16 +178,16 @@ async def import_collective_entries(
 
             if readme_page is None:
                 raise RuntimeError(
-                    f"Die Readme-/Startseite des Collectives "
-                    f"{collective_id!r} konnte nicht gefunden werden."
+                    f"The Readme/home page of the Collective "
+                    f"{collective_id!r} could not be found."
                 )
 
             readme_id = page_id(readme_page)
 
             if not readme_id:
                 raise RuntimeError(
-                    "Die Readme-/Startseite wurde gefunden, "
-                    "aber ihre ID fehlt."
+                    "The Readme/home page was found, "
+                    "but its ID is missing."
                 )
 
             await _log_function_event(
@@ -211,8 +211,8 @@ async def import_collective_entries(
 
             if not overview_id:
                 raise RuntimeError(
-                    f"Die Übersichtsseite {config.overview_title!r} "
-                    "wurde erstellt, aber ihre ID fehlt."
+                    f"The overview page {config.overview_title!r} "
+                    "was created, but its ID is missing."
                 )
 
             await _log_function_event(
@@ -229,8 +229,8 @@ async def import_collective_entries(
 
             if not overview_id:
                 raise RuntimeError(
-                    f"Für die Übersichtsseite {config.overview_title!r} "
-                    "fehlt die ID."
+                    f"For the overview page {config.overview_title!r} "
+                    "the ID is missing."
                 )
 
             await _log_function_event(
@@ -242,7 +242,7 @@ async def import_collective_entries(
                 overview_page_id=overview_id,
             )
 
-        # Seite neu laden, damit wir aktuelle API-Metadaten erhalten.
+        # Reload the page so that we get current API metadata.
         overview_page = await refresh_created_page(
             tools,
             page_id_value=overview_id,
@@ -265,8 +265,8 @@ async def import_collective_entries(
                 "Die ID der geladenen Übersichtsseite fehlt."
             )
 
-        # Die MCP-Funktion liefert alle Seiten des Collectives.
-        # Der Seitencache wird nach jedem erfolgreichen Import aktualisiert.
+        # The MCP function returns all pages of the Collective.
+        # The page cache is updated after each successful import.
         child_pages = await get_collective_pages(
             tools,
             collective_id=collective_id,
@@ -292,7 +292,7 @@ async def import_collective_entries(
 
                 if entry_name is None or not str(entry_name).strip():
                     raise ValueError(
-                        f"Eintrag {index + 1} hat keinen gültigen Namen."
+                        f"Entry {index + 1} has no valid name."
                     )
 
                 prefix = str(config.entry_prefix or "").strip("-_ ")
@@ -308,11 +308,11 @@ async def import_collective_entries(
 
                 if not isinstance(content, str):
                     raise TypeError(
-                        f"Der Renderer für {title!r} "
-                        "muss einen String zurückgeben."
+                        f"The renderer for {title!r} "
+                        "must return a string."
                     )
 
-                # Bestehende Seite anhand des Titels suchen.
+                    # Search for existing page by title.
                 existing_page = find_page_by_title(
                     child_pages,
                     title,
@@ -340,7 +340,7 @@ async def import_collective_entries(
                     )
 
                 else:
-                    # Die neue Seite wird unter der Übersichtsseite erstellt.
+                    # The new page is created under the overview page.
                     created_page = await create_collective_page(
                         tools,
                         collective_id=collective_id,
@@ -353,10 +353,10 @@ async def import_collective_entries(
                     action = "created"
 
                     if not target_id:
-                        raise RuntimeError(
-                            f"Die Seite {title!r} wurde erstellt, "
-                            "aber ihre ID fehlt."
-                        )
+                    raise RuntimeError(
+                        f"The page {title!r} was created, "
+                        "but its ID is missing."
+                    )
 
                     await _log_function_event(
                         config,
@@ -370,7 +370,7 @@ async def import_collective_entries(
                         action=action,
                     )
 
-                # Aktuelle Seitendaten für den Dateipfad abrufen.
+                # Get current page data for the file path.
                 page = await refresh_created_page(
                     tools,
                     page_id_value=target_id,
@@ -435,8 +435,8 @@ async def import_collective_entries(
                     action=action,
                 )
 
-                # Cache aktualisieren, damit später verarbeitete Einträge
-                # bereits importierte Seiten wiederfinden.
+                # Cache update, so that subsequently processed entries
+                # can find already imported pages.
                 page_identifier = page_id(page)
 
                 existing_index = next(
@@ -464,7 +464,7 @@ async def import_collective_entries(
                 errors.append(error)
 
                 logger.exception(
-                    "Import eines Collective-Eintrags fehlgeschlagen: "
+                    "Import of a Collective entry failed: "
                     "collective_id=%s, entry_number=%s, title=%r",
                     collective_id,
                     entry_number,
@@ -526,7 +526,7 @@ async def import_collective_entries(
 
     except Exception as exc:
         logger.exception(
-            "Import der Collective-Einträge fehlgeschlagen: collective_id=%s",
+            "Import of Collective entries failed: collective_id=%s",
             collective_id,
         )
 
@@ -554,14 +554,14 @@ async def import_single_page(
     collective: Any = None,
 ) -> dict:
     """
-    Erstellt oder aktualisiert eine einzelne Collective-Seite.
+    Creates or updates a single Collective page.
 
-    Sucht anhand des Titels im gesamten Collective.
-    Existiert die Seite, wird ihr Markdown-Inhalt aktualisiert.
-    Andernfalls wird eine neue Seite unter dem angegebenen Parent erstellt.
+    Searches by title in the entire Collective.
+    If the page exists, its Markdown content is updated.
+    Otherwise, a new page is created under the specified parent.
 
-    Wenn parent_id fehlt oder 0 ist, wird die Readme-/Startseite als
-    Parent verwendet, da parent_id=0 beim Erstellen nicht akzeptiert wird.
+    If parent_id is missing or 0, the Readme/home page is used as
+    the parent, as parent_id=0 is not accepted during creation.
     """
     config = config or CollectiveConfig()
     resolved_title = page_title or title
@@ -583,13 +583,13 @@ async def import_single_page(
         if not isinstance(collective_id, (str, int)) or not str(
             collective_id
         ).strip():
-            raise ValueError("collective_id darf nicht leer sein.")
+            raise ValueError("collective_id must not be empty.")
 
         if not resolved_title or not resolved_title.strip():
-            raise ValueError("Der Seitentitel darf nicht leer sein.")
+            raise ValueError("The page title must not be empty.")
 
         if not isinstance(content, str):
-            raise TypeError("Der Seiteninhalt muss ein String sein.")
+            raise TypeError("The page content must be a string.")
 
         resolved_title = resolved_title.strip()
 
@@ -707,16 +707,15 @@ async def import_single_page(
 
         if page is None:
             raise RuntimeError(
-                f"Die Seite {resolved_title!r} (ID {target_id}) "
-                "konnte nach dem Erstellen/Auffinden nicht geladen werden."
+                f"The page {resolved_title!r} (ID {target_id}) "
+                "could not be loaded after creation/finding."
             )
 
         path_object = get_collective_page_path(page)
 
         if path_object is None:
             raise RuntimeError(
-                f"Für die Seite {resolved_title!r} "
-                "konnte kein Dateipfad ermittelt werden."
+                f"No file path could be determined for the page {resolved_title!r}."
             )
 
         path = str(path_object)
@@ -769,7 +768,7 @@ async def import_single_page(
 
     except Exception as exc:
         logger.exception(
-            "import_single_page fehlgeschlagen: collective_id=%s, title=%r",
+            "import_single_page failed: collective_id=%s, title=%r",
             collective_id,
             resolved_title,
         )

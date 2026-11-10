@@ -4,11 +4,10 @@ from typing import Any
 
 def render_markdown_list(entries: list[dict[str, Any]], config: Any) -> str:
     """
-    Rendert Einträge als Markdown.
+    Renders entries as Markdown.
 
-    Verwendet die in der Konfiguration hinterlegten Render-Callbacks,
-    sofern vorhanden. Andernfalls wird eine generische Markdown-
-    Darstellung erzeugt.
+    Uses the render callbacks stored in the configuration, if available.
+    Otherwise, a generic Markdown representation is generated.
     """
     if config.render_callback:
         return config.render_callback(entries, config)

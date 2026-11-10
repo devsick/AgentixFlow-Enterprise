@@ -49,7 +49,7 @@ class CollectiveConfig:
     scalar_fields: list[str] = field(default_factory=list)
     list_fields: list[str] = field(default_factory=list)
 
-    # Funktionen aus den jeweiligen Nodes
+    # Functions from the respective Nodes
     get_entry_name: Any = None
     render_entry: Any = None
     render_overview: Any = None
@@ -63,12 +63,12 @@ class CollectiveConfig:
 
 
 def utc_timestamp() -> str:
-    """Gibt einen UTC-Zeitstempel im ISO-8601-Format zurück."""
+    """Returns a UTC timestamp in ISO-8601 format."""
     return datetime.now(timezone.utc).isoformat()
 
 
 def json_safe(value: Any) -> Any:
-    """Konvertiert Werte möglichst verlustarm in JSON-kompatible Objekte."""
+    """Converts values into JSON-compatible objects as losslessly as possible."""
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
 
@@ -104,9 +104,9 @@ def json_safe(value: Any) -> Any:
 
 def extract_result(response: Any) -> Any:
     """
-    Extrahiert den Nutzinhalt einer MCP-Antwort.
+    Extracts the payload content of an MCP response.
 
-    Die ursprüngliche Antwort wird separat im Monitoring erfasst.
+    The original response is recorded separately in monitoring.
     """
     if not isinstance(response, dict):
         return response
@@ -123,7 +123,7 @@ def extract_result(response: Any) -> Any:
 
 
 def _response_error(response: Any) -> str | None:
-    """Ermittelt Fehler aus einer MCP-Antwort, sofern vorhanden."""
+    """Determines errors from an MCP response, if present."""
     if not isinstance(response, dict):
         return None
 
@@ -158,7 +158,7 @@ def _response_error(response: Any) -> str | None:
 
 
 def extract_list(value: Any, *keys: str) -> list:
-    """Extrahiert eine Liste direkt oder aus einem bekannten Antwortfeld."""
+    """Extracts a list directly or from a known response field."""
     if isinstance(value, list):
         return value
 
@@ -176,9 +176,9 @@ async def log_collective_tool_event(
     event: dict,
 ) -> None:
     """
-    Schreibt ein MCP-Tool-Event direkt in events.jsonl.
+    Writes an MCP tool event directly to events.jsonl.
 
-    Monitoringfehler dürfen den eigentlichen MCP-Aufruf nicht verhindern.
+    Monitoring errors must not prevent the actual MCP call.
     """
     graph_id = config.graph_id
     run_id = config.run_id
@@ -202,12 +202,12 @@ async def log_collective_tool_event(
             details=details,
         )
     except Exception:
-        # Monitoring darf die Fachoperation nicht blockieren.
+        # Monitoring must not block the domain operation.
         pass
 
 
 class MonitoredTool:
-    """Wrapper, der MCP-Aufrufe vor und nach der Ausführung protokolliert."""
+    """Wrapper that logs MCP calls before and after execution."""
 
     def __init__(
         self,
@@ -288,11 +288,11 @@ async def load_collective_tools(
     client: Any,
     config: CollectiveConfig,
 ) -> dict[str, MonitoredTool]:
-    """Lädt die benötigten MCP-Tools und versieht sie mit Monitoring."""
+    """Loads the required MCP tools and provides them with monitoring."""
     try:
         tools = await client.get_tools(config.allowed_tools)
     except TypeError:
-        # Fallback für MCP-Clients, deren get_tools keine Toolliste annimmt.
+        # Fallback for MCP clients whose get_tools does not accept a tool list.
         tools = await client.get_tools()
 
     tools_by_name = {
@@ -320,7 +320,7 @@ async def call_collective_tool(
     tool_name: str,
     arguments: dict,
 ) -> Any:
-    """Ruft ein MCP-Tool auf, prüft Fehler und extrahiert das Ergebnis."""
+    """Calls an MCP tool, checks for errors, and extracts the result."""
     tool = tools.get(tool_name)
 
     if tool is None:

@@ -7,11 +7,11 @@ def validate_entries(
     config: Any,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """
-    Validiert und normalisiert Einträge anhand der Konfiguration.
+    Validates and normalizes entries based on the configuration.
 
-    Rückgabe:
-        - valid_entries: normalisierte Einträge
-        - errors: aufgetretene Validierungsfehler
+    Returns:
+        - valid_entries: normalized entries
+        - errors: occurred validation errors
     """
     valid_entries: list[dict[str, Any]] = []
     errors: list[str] = []
@@ -19,7 +19,7 @@ def validate_entries(
     for index, entry in enumerate(entries):
         if not isinstance(entry, dict):
             errors.append(
-                f"Eintrag {index + 1}: Erwartet wurde ein Dictionary."
+                f"Entry {index + 1}: A dictionary was expected."
             )
             continue
 
@@ -34,8 +34,8 @@ def validate_entries(
                 normalized[field_name] = []
             elif not isinstance(normalized[field_name], list):
                 errors.append(
-                    f"Eintrag {index + 1}: "
-                    f"Feld '{field_name}' muss eine Liste sein."
+                    f"Entry {index + 1}: "
+                    f"Field '{field_name}' must be a list."
                 )
             else:
                 normalized[field_name] = [
@@ -48,12 +48,12 @@ def validate_entries(
             if result:
                 if isinstance(result, list):
                     errors.extend(
-                        f"Eintrag {index + 1}: {error}"
+                        f"Entry {index + 1}: {error}"
                         for error in result
                     )
                 else:
                     errors.append(
-                        f"Eintrag {index + 1}: {result}"
+                        f"Entry {index + 1}: {result}"
                     )
 
         valid_entries.append(normalized)

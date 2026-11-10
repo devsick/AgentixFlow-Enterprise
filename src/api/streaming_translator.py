@@ -31,9 +31,9 @@ VALID_STREAMING_MODES = {
 }
 
 # Thinking-Logging:
-# True  = LLM-Streaming-Inhalte vollständig protokollieren.
-# False = Nur llm_end als LLM-Event protokollieren.
-#         Das Streaming an den Client bleibt unverändert.
+# True  = Log all LLM-streaming content completely.
+# False = Only log llm_end as an LLM event.
+#         Streaming to the client remains unchanged.
 LOG_THINKING = False
 
 
@@ -284,7 +284,7 @@ class StreamingTranslator:
             initial_state.setdefault("run_id", run_id)
             initial_state.setdefault("graph_id", graph_id)
 
-        # Monitoring muss initialisiert sein, bevor der Graph startet.
+        # Monitoring must be initialized before the graph starts.
         await monitoring_writer.initialize_run(
             graph_id,
             run_id,
@@ -345,7 +345,7 @@ class StreamingTranslator:
                 content = _message_content(chunk)
                 reasoning_content = _extract_reasoning(chunk)
 
-                # LLM-Streaming-Logging nur bei aktiviertem Schalter.
+                # LLM-Streaming-Logging only if the switch is enabled.
                 if LOG_THINKING:
                     full_chunk_data = _dump_chunk_for_monitoring(chunk)
 
@@ -372,8 +372,8 @@ class StreamingTranslator:
                             {"content": content},
                         )
 
-                # Die Ausgabe an den Client bleibt unabhängig
-                # vom Logging-Schalter unverändert.
+                # The output to the client remains unchanged
+                # regardless of the logging switch.
                 delta = {}
 
                 if streaming_mode == STREAMING_MODE_LIVE and content:
@@ -448,7 +448,7 @@ class StreamingTranslator:
                 continue
 
             # -------------------------------------------------
-            # 3. LLM-Ende weiterhin protokollieren
+            # 3. Continue to log LLM end
             # -------------------------------------------------
             if event_type == "on_chat_model_end":
                 output = event_data.get("output")
@@ -466,7 +466,7 @@ class StreamingTranslator:
                 continue
 
             # -------------------------------------------------
-            # 4. Statusmeldung beim Ende eines status_only-Knotens
+            # 4. Status message at the end of a status_only node
             # -------------------------------------------------
             if event_type != "on_chain_end":
                 continue
@@ -551,17 +551,17 @@ async def stream_translator(
     graph_factory: Callable[[], Awaitable[Any]],
 ) -> AsyncIterator[str]:
     """
-    Kompatible öffentliche Schnittstelle für chat_completions.py.
-    Erhält API-Key-Prüfung, Monitoring und Graph-Initialisierung.
+    Compatible public interface for chat_completions.py.
+    Handles API key verification, monitoring, and graph initialization.
     """
 
     factory = None
 
-    # Bestehendes Verhalten: registriertes Modell auflösen.
-    # Die Factory wird über den übergebenen Wrapper aufgerufen.
+    # Existing behavior: resolve registered model.
+    # The factory is called via the passed wrapper.
     graph = await graph_factory()
 
-    # API-Key-Verifizierung aus der bisherigen Implementierung.
+    # API key verification from previous implementation.
     from src.settings.config_store import config_store
 
     profile = config_store.llm_profiles.get(model_id)
@@ -576,7 +576,7 @@ async def stream_translator(
             yield "data: [DONE]\n\n"
             return
 
-    # API-Key an Graph bzw. Agent weitergeben.
+    # Pass API key to graph or agent.
     if hasattr(graph, "set_api_key"):
         await graph.set_api_key(request.api_key)
     elif hasattr(graph, "api_key"):

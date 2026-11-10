@@ -6,7 +6,7 @@ from langchain_openai import ChatOpenAI
 
 
 class ReasoningChatOpenAI(ChatOpenAI):
-    """ChatOpenAI, das Reasoning-Felder von oobabooga erhält."""
+    """ChatOpenAI, which contains Reasoning-Fields of oobabooga."""
 
     def _convert_chunk_to_generation_chunk(
         self,
