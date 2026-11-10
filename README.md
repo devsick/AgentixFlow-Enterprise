@@ -1,61 +1,66 @@
-# Flow-Agent-API
+# AgentixFlow-Enterprise
 
-## Project Goal
-The **Flow-Agent-API** is a high-performance, OpenAI-compatible proxy interface for LangGraph-based workflows.
+## Project Vision
+**AgentixFlow-Enterprise** is a high-performance, enterprise-grade orchestration framework designed to transform complex business processes into scalable, autonomous agentic workflows. 
 
-The goal is to abstract complex agent logics (with flows, tool calls, conditions, and complex states) so simply that they can be addressed like a standard LLM model. This enables extremely fast development of agent workflows that can be immediately integrated into existing ecosystems (such as AnythingLLM, custom UIs, or other LLM clients) without relying on cumbersome low-code builders like Flowise-AI.
+Unlike simple chatbot implementations, this framework provides the industrial-strength infrastructure required to deploy, manage, and monitor sophisticated multi-agent systems. It abstracts complex agentic logic into standardized "models," allowing them to be seamlessly integrated into any existing ecosystem (such as AnythingLLM, custom enterprise UIs, or standard LLM clients) via OpenAI-compatible interfaces.
 
-## Core Features
-- **OpenAI Compatibility:** Implementation of the standards for `/v1/chat/completions`, `/v1/responses`, and `/v1/models`.
-- **Real-time Streaming:** Support for `astream_events` to send token generation, "thinking/reasoning" content, and tool-call information to the client in real-time.
-- **Hybrid Observability:**
-    - **Hot Path:** Immediate feedback via the stream for the UI.
-    - **Cold Path:** File-based persistence of runtime data (`meta.json`, `state.json`, `events.jsonl`) in the `monitoring_runs/` directory for subsequent analysis, without the overhead of a database.
-- **Automatic Monitoring:** An `observe_node` decorator handles the tracing of node lifecycles, error messages, and metrics.
+## Core Capabilities
 
-## How to Create a New Graph (Model)
-To implement a new agentic workflow and expose it as a model, follow these steps:
+### 🚀 Enterprise Orchestration
+*   **Model-as-a-Service:** Abstract complex LangGraph workflows (with multi-step flows, tool-use, and conditional logic) into standardized, addressable models.
+*   **Dynamic Model Registry:** A robust registry system that allows for the rapid deployment and discovery of new agentic workflows without system downtime.
+*   **Multi-Protocol Connectivity:** Designed to bridge the gap between diverse LLM backends (OpenAI, Anthropic, Ollama, etc.) and specialized enterprise tools via the Model Context Protocol (MCP).
+
+### 📡 Real-Time Intelligence
+*   **Continuous Streaming:** Leverages `astream_events` to provide a "live" experience, streaming token generation, reasoning/thinking content, and real-time tool-call updates via Server-Sent Events (SSE).
+*   **Seamless Integration:** Highly compatible with the OpenAI API standard (`/v1/chat/completions`, `/v1/responses`, `/v1/models`), making it a "drop-in" upgrade for any existing LLM application.
+
+### 👁️ Industrial-Grade Observability
+*   **Hybrid Monitoring Architecture:** 
+    *   **Hot Path:** Real-time feedback streamed directly to the user for immediate interaction.
+    *   **Cold Path:** Deep, file-based persistence of every runtime event, state change, and metadata in the `monitoring_runs/` directory for forensic analysis, auditing, and debugging.
+*   **Automated Lifecycle Tracing:** Built-in decorators for automated capture of node runtimes, error states, and performance metrics.
+
+---
+
+## Developer Guide: Implementing an Agentic Workflow
+
+To integrate a new business process into the framework, follow this standardized workflow:
 
 ### 1. Configuration
-Update `src/config/config.json` to include any necessary new components:
-- Add new **MCP servers** if required.
-- Add or modify **LLM profiles** as needed.
+Update `src/config/config.json` to define your environment:
+- Register new **MCP servers** to provide tools to your agents.
+- Configure **LLM profiles** for different model backends.
 
-*Note: If you are adding a new MCP server, you must first create a corresponding `mcp_client.py` in `src/tools/`.*
-
-### 2. Directory Structure
-Create a new directory for your graph under `src/graphs/graph_name/` with the following structure:
+### 2. Workflow Structure
+Create a new directory under `src/graphs/<graph_name>/` following this architecture:
 ```text
 src/graphs/graph_name/
-├── agents/        # Contains the agent definition (created by LLM) and its system prompt
-├── nodes/         # Contains the individual node implementations
-├── state.py       # Defines the graph state
-└── graph.py        # Defines the LangGraph workflow
+├── agents/        # Agent definitions and specialized system prompts
+├── nodes/         # Individual node implementations (the "steps" of the process)
+├── state.py       # Defines the shared state and token aggregation logic
+└── graph.py        # Defines the LangGraph orchestration workflow
 ```
 
-### 3. Implementation Details
-- **State Management:** In `state.py`, define properties to store initialized MCP clients. This allows any node within the graph to access the client directly from the state.
-- **MCP Initialization:** Implement an `mcp_initializer` node for every required MCP client. This node is responsible for initializing the client and saving it into the graph state.
-- **Node Standard:** Every node must:
-    - Import `node_wrapper`.
-    - Use the `observe_node()` decorator to enable automated lifecycle monitoring.
-    - Import `monitoring_writer.py` if additional custom telemetry/logging is required.
-- **Registration:** Finally, register your new graph in `src/api/registry.py` to make it discoverable via the Models Discovery endpoint.
+### 3. Implementation Standards
+*   **State-Driven Tooling:** Use the graph state to store and pass initialized MCP clients, ensuring any node can access enterprise tools securely.
+*   **Automated Monitoring:** Every node must use the `observe_node()` decorator to ensure the workflow is fully traceable in the monitoring logs.
+*   **Standardized Registration:** Register your new graph in `src/api/registry.py` to make it instantly available as a model.
 
-## Current Status
-The basic architecture of the API is implemented and ready for use:
+---
 
-### ✅ Implemented
-- [x] **API Structure:** FastAPI basis with modular router architecture.
-- [x] **Model Registry:** Dynamic registration of LangGraph graphs as models.
-- [x] **Chat Completions:** Streaming-capable endpoint including support for reasoning content.
-- [x] **Responses API:** Implementation of the new OpenAI standard for structured responses.
-- [x] **Models Discovery:** Endpoint for listing available agent models.
-- [x] **Monitoring Writer:** File-based logging of run IDs, states, and events.
-- [x] **Node Observer:** Decorator for automated capture of node runtimes and errors.
-- [x] **Containerization:** Optimized multi-stage `Containerfile` and `docker-compose.yml` (Podman-ready).
+## Current Implementation Status
 
-### 🛠 In Progress / Next Steps
-- [ ] Full implementation of the `responses` model (complete state mapping).
-- [ ] Extension of error-handling patterns for more complex retry logics.
-- [ ] Optimization of the cleanup (retention) of `monitoring_runs`.
+### ✅ Core Infrastructure
+- [x] **High-Performance API:** Modular FastAPI architecture designed for scale.
+- [x] **Dynamic Model Registry:** Automates the management of agentic workflows.
+- [x] **Streaming Engine:** Full support for reasoning and tool-call streaming.
+- [x] **Observability Suite:** Integrated monitoring for real-time and forensic analysis.
+- [x] **Containerized Deployment:** Production-ready multi-stage containerization.
+
+### 🛠 Roadmap & Future Directions
+- [ ] **Advanced Multi-Protocol Support:** Deep native integration for Ollama, Anthropic, and more.
+- [ ] **Modular Memory Service:** Connectivity for diverse vector databases with built-in GDPR/Privacy compliance.
+- [ ] **Automated QA & Evaluation:** Framework for testing and validating agentic reliability.
+- [ ] **Distributed Orchestration:** Support for cross-node, decentralized agent execution.
