@@ -1,0 +1,29 @@
+{
+    "mcp_servers": {
+        "nextcloud-mcp": {
+            "type": "http",
+            "url": "http://nextcloud-mcp:8000/mcp"
+        },
+        "firecrawl": {
+            "type": "http",
+            "url": "https://mcp.firecrawl.dev/v2/mcp"
+        },
+        "anki-mcp":{
+            "type": "http",
+            "url": "http:anki-mcp:7012"
+        }
+    },
+    "llm_profiles": {
+        "oogabooga": {
+            "type": "reasoning",
+            "name": "oogabooga",
+            "url": "http://oogabooga:5000/v1",
+            "model": "modelname",
+            "api_key": "api_key",
+            "extra_body": {
+                "enable_thinking": true,
+                "reasoning_effort": "high"
+            }
+        }
+    }
+}
