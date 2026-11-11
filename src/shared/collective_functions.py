@@ -353,10 +353,10 @@ async def import_collective_entries(
                     action = "created"
 
                     if not target_id:
-                    raise RuntimeError(
-                        f"The page {title!r} was created, "
-                        "but its ID is missing."
-                    )
+                        raise RuntimeError(
+                            f"The page {title!r} was created, "
+                            "but its ID is missing."
+                        )
 
                     await _log_function_event(
                         config,

@@ -8,9 +8,10 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from src.settings.config_store import config_store
+from src.tools.mcp_client_interface import MCPClientInterface
 
 
-class NextcloudMCPClient:
+class NextcloudMCPClient(MCPClientInterface):
     """
     MCP Client for Nextcloud via Streamable HTTP.
 
@@ -19,7 +20,9 @@ class NextcloudMCPClient:
     by the official MCP Python SDK.
     """
 
-    def __init__(self, allowed_tools: List[str]):
+    def __init__(self, allowed_tools: Optional[List[str]] = None):
+        super().__init__(allowed_tools=allowed_tools)
+
         self.server_config = config_store.mcp_server.get("nextcloud-mcp")
 
         if not self.server_config:
@@ -28,11 +31,7 @@ class NextcloudMCPClient:
             )
 
         self.url = self.server_config.url.rstrip("/")
-        self.allowed_tools = frozenset(allowed_tools)
-
-        self._exit_stack: Optional[AsyncExitStack] = None
-        self._session: Optional[ClientSession] = None
-        self._connected = False
+        
 
     async def _ensure_connected(self) -> None:
         """Opens the transport and initializes the MCP session once."""
@@ -97,3 +96,12 @@ class NextcloudMCPClient:
                     for tool in result.tools
                 ]
             }
+        
+        if method == "tools/call":
+            result = await self._session.call_tool(
+                name=params["name"],
+                arguments=params.get("arguments", {})
+            )
+            return result.content
+
+        raise NotImplementedError(f"Method {method} not implemented.")

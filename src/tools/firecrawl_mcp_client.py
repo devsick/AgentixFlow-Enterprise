@@ -5,9 +5,10 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from src.settings.config_store import config_store
+from src.tools.mcp_client_interface import MCPClientInterface
 
 
-class FirecrawlMCPClient:
+class FirecrawlMCPClient(MCPClientInterface):
     """
     MCP Client for Firecrawl via Streamable HTTP.
 
@@ -16,8 +17,11 @@ class FirecrawlMCPClient:
     the official MCP Python SDK.
     """
 
-    def __init__(self, allowed_tools: List[str]):
+    def __init__(self, allowed_tools: Optional[List[str]] = None):
+        super().__init__(allowed_tools=allowed_tools)
+
         self.server_config = config_store.mcp_server.get("firecrawl")
+
 
         if not self.server_config:
             raise ValueError(
@@ -25,11 +29,7 @@ class FirecrawlMCPClient:
             )
 
         self.url = self.server_config.url.rstrip("/")
-        self.allowed_tools = frozenset(allowed_tools)
-
-        self._exit_stack: Optional[AsyncExitStack] = None
-        self._session: Optional[ClientSession] = None
-        self._connected = False
+        
 
     async def _ensure_connected(self) -> None:
         """Opens the transport and initializes the MCP session once."""
@@ -95,7 +95,13 @@ class FirecrawlMCPClient:
                 ]
             }
         
-        # Placeholder for other methods (tools/call, etc.)
+        if method == "tools/call":
+            result = await self._session.call_tool(
+                name=params["name"],
+                arguments=params.get("arguments", {})
+            )
+            return result.content
+
         raise NotImplementedError(f"Method {method} not implemented.")
 
     async def close(self) -> None:
