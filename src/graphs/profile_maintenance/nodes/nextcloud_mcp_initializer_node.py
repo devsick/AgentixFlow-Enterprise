@@ -19,7 +19,7 @@ BASELINE_TOOLS = [
 ]
 
 
-async def initialize_mcp_node(state: Any) -> Dict[str, Any]:
+async def nextcloud_mcp_initializer_node(state: Any) -> Dict[str, Any]:
     """
     Initializes the MCP client with the global allowlist.
     The client is stored in the LangGraph state.
@@ -45,4 +45,4 @@ async def initialize_mcp_node(state: Any) -> Dict[str, Any]:
         )
         raise
 
-    return {"mcp_client": client}
+    return {"mcp_clients": {"nextcloud": client}}

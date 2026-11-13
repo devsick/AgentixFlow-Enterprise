@@ -1,6 +1,8 @@
+
 from contextlib import AsyncExitStack
 from typing import Any, Dict, List, Optional
 
+from httpx2 import AsyncClient
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
@@ -12,9 +14,8 @@ class AnkiMCPClient(MCPClientInterface):
     """
     MCP Client for Anki via Streamable HTTP.
 
-    The client keeps its MCP session open during its lifetime.
-    Handshake, session ID, protocol headers, and transport are managed 
-    by the official MCP Python SDK.
+    The HTTP client carries the configured authorization headers.
+    The MCP SDK manages the handshake and session lifecycle.
     """
 
     def __init__(self, allowed_tools: Optional[List[str]] = None):
@@ -27,11 +28,31 @@ class AnkiMCPClient(MCPClientInterface):
                 "Could not find 'anki-mcp' configuration in config_store."
             )
 
+        self.server_type = self.server_config.get("type", "http")
+
+        if self.server_type != "http":
+            raise ValueError(
+                f"Unsupported Anki MCP transport type: {self.server_type}"
+            )
+
         self.url = self.server_config.url.rstrip("/")
-        
+
+        self.headers = dict(
+            self.server_config.get("headers") or {}
+        )
+
+        if not self.url.startswith("http://"):
+            raise ValueError(
+                f"Anki MCP requires an internal HTTP URL: {self.url}"
+            )
+
+        if not self.headers.get("Authorization"):
+            raise ValueError(
+                "Missing Authorization header in Anki MCP configuration."
+            )
 
     async def _ensure_connected(self) -> None:
-        """Opens the transport and initializes the MCP session once."""
+        """Open the HTTP transport and initialize the MCP session."""
 
         if self._connected and self._session is not None:
             return
@@ -41,14 +62,27 @@ class AnkiMCPClient(MCPClientInterface):
         try:
             await stack.__aenter__()
 
+            # HTTP client with configured Bearer authorization.
+            http_client = await stack.enter_async_context(
+                AsyncClient(
+                    headers=self.headers,
+                    timeout=30.0,
+                )
+            )
+
+            # Pass the authenticated HTTP client to the MCP transport.
             read_stream, write_stream = await stack.enter_async_context(
-                streamable_http_client(self.url)
+                streamable_http_client(
+                    self.url,
+                    http_client=http_client,
+                )
             )
 
             session = ClientSession(read_stream, write_stream)
+
             await stack.enter_async_context(session)
 
-            # MCP-Handshake; the SDK manages the protocol initialization.
+            # Initialize MCP handshake.
             await session.initialize()
 
             self._exit_stack = stack
@@ -56,15 +90,40 @@ class AnkiMCPClient(MCPClientInterface):
             self._connected = True
 
             print(
-                f"[MCP] Connected to {self.url}",
+                f"[ANKI MCP] Connected successfully: {self.url}",
                 flush=True,
             )
 
-        except Exception:
-            await stack.aclose()
+        except BaseException as e:
+            print(
+                f"[ANKI MCP] Connection failed: {type(e).__name__}: {e}",
+                flush=True,
+            )
+
+            if hasattr(e, "code"):
+                print(
+                    f"[ANKI MCP] Error code: {e.code}",
+                    flush=True,
+                )
+
+            if hasattr(e, "data"):
+                print(
+                    f"[ANKI MCP] Error data: {e.data}",
+                    flush=True,
+                )
+
+            try:
+                await stack.aclose()
+            except BaseException as close_error:
+                print(
+                    f"[ANKI MCP] Cleanup error: {close_error}",
+                    flush=True,
+                )
+
             self._exit_stack = None
             self._session = None
             self._connected = False
+
             raise
 
     async def _call_mcp_method(
@@ -72,12 +131,7 @@ class AnkiMCPClient(MCPClientInterface):
         method: str,
         params: Dict[str, Any],
     ) -> Any:
-        """
-        Compatibility method for the previous client setup.
-
-        Supports tools/list and tools/call. The MCP communication itself
-        occurs via ClientSession and not through custom-built HTTP POSTs.
-        """
+        """Execute MCP protocol methods."""
 
         await self._ensure_connected()
 
@@ -89,25 +143,37 @@ class AnkiMCPClient(MCPClientInterface):
 
             return {
                 "tools": [
-                    tool.model_dump(by_alias=True, mode="json")
+                    tool.model_dump(
+                        by_alias=True,
+                        mode="json",
+                    )
                     for tool in result.tools
                 ]
             }
-        
+
         if method == "tools/call":
             result = await self._session.call_tool(
                 name=params["name"],
-                arguments=params.get("arguments", {})
+                arguments=params.get("arguments", {}),
             )
+
             return result.content
 
-        raise NotImplementedError(f"Method {method} not implemented.")
+        raise NotImplementedError(
+            f"Method {method} not implemented."
+        )
 
     async def close(self) -> None:
-        """Closes the session and the ExitStack cleanly."""
-        if self._exit_stack:
+        """Close the MCP session and HTTP transport."""
+
+        if self._exit_stack is not None:
             await self._exit_stack.aclose()
-            self._exit_stack = None
-            self._session = None
-            self._connected = False
-            print("[MCP] Connection closed.", flush=True)
+
+        self._exit_stack = None
+        self._session = None
+        self._connected = False
+
+        print(
+            "[ANKI MCP] Connection closed.",
+            flush=True,
+        )

@@ -1,9 +1,8 @@
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 import json
-import re
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from src.graphs.anki.state import AnkiState
 from src.graphs.anki.agents.anki_agent import AnkiAgent
@@ -16,7 +15,7 @@ class AnkiAgentNode:
     OVERVIEW_TITLE = "Anki Cards"
 
     def __init__(self):
-        self.agent = AnkiAgent()
+        self.agent = AnkiAgent(tool_factory=MCPToolFactory())
         self.tool_factory = MCPToolFactory()
 
     @staticmethod
@@ -53,76 +52,75 @@ class AnkiAgentNode:
         return str(content).strip()
 
     @staticmethod
-    def _extract_json_array(content: str) -> Optional[List[Dict[str, Any]]]:
+    def _extract_agent_output(content: str) -> Dict[str, Any]:
         """
-        Extract a JSON array from the agent response.
+        Extract and validate the unified JSON output from the agent.
 
-        Supported formats:
-        - Raw JSON array
-        - JSON array inside a Markdown code block
-        - JSON array embedded in surrounding text
+        Expected format:
 
-        Returns None if the response does not contain a
-        JSON array. This allows normal agent responses
-        to pass through without card creation.
+        {
+            "response": "The actual result of the user's request.",
+            "isCardCreation": false,
+            "cards": []
+        }
+
+        The response must be a valid JSON object.
         """
 
         if not content:
-            return None
+            raise ValueError(
+                "Agent returned empty content."
+            )
 
-        candidates = []
+        try:
+            result = json.loads(content)
 
-        # First attempt: parse the entire response directly.
-        candidates.append(content.strip())
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Agent returned invalid JSON: {exc}"
+            ) from exc
 
-        # Second attempt: extract JSON from a fenced code block.
-        fenced_matches = re.findall(
-            r"```(?:json)?\s*(.*?)```",
-            content,
-            re.DOTALL | re.IGNORECASE,
-        )
+        if not isinstance(result, dict):
+            raise ValueError(
+                "Expected a JSON object as agent output."
+            )
 
-        candidates.extend(fenced_matches)
+        required_fields = {
+            "response",
+            "isCardCreation",
+            "cards",
+        }
 
-        for candidate in candidates:
+        missing_fields = required_fields - result.keys()
 
-            candidate = candidate.strip()
+        if missing_fields:
+            raise ValueError(
+                "Agent output is missing required properties: "
+                f"{', '.join(sorted(missing_fields))}"
+            )
 
-            if not candidate:
-                continue
+        if not isinstance(result["response"], str):
+            raise ValueError(
+                "'response' must be a string."
+            )
 
-            try:
-                parsed = json.loads(candidate)
+        if not isinstance(result["isCardCreation"], bool):
+            raise ValueError(
+                "'isCardCreation' must be a boolean."
+            )
 
-                if isinstance(parsed, list):
-                    return parsed
+        if not isinstance(result["cards"], list):
+            raise ValueError(
+                "'cards' must be an array."
+            )
 
-                if isinstance(parsed, dict) and isinstance(
-                    parsed.get("cards"),
-                    list,
-                ):
-                    return parsed["cards"]
+        if not result["isCardCreation"] and result["cards"]:
+            raise ValueError(
+                "'cards' must be empty when "
+                "'isCardCreation' is false."
+            )
 
-            except json.JSONDecodeError:
-                pass
-
-        # Final fallback: find a JSON array in surrounding text.
-        decoder = json.JSONDecoder()
-
-        for match in re.finditer(r"\[", content):
-
-            try:
-                parsed, _ = decoder.raw_decode(
-                    content[match.start():]
-                )
-
-                if isinstance(parsed, list):
-                    return parsed
-
-            except json.JSONDecodeError:
-                continue
-
-        return None
+        return result
 
     @staticmethod
     def _validate_cards(
@@ -131,7 +129,11 @@ class AnkiAgentNode:
         """
         Validate the structure of generated card objects.
 
-        Only cards with isCreatingCard=True are executed.
+        Card creation is controlled exclusively by the
+        top-level isCardCreation property.
+
+        Individual card objects do not require an
+        isCreatingCard property.
         """
 
         if not isinstance(cards, list):
@@ -148,21 +150,6 @@ class AnkiAgentNode:
                     f"Card at index {index} must be a JSON object."
                 )
 
-            if "isCreatingCard" not in card:
-                raise ValueError(
-                    f"Card at index {index} is missing "
-                    "'isCreatingCard'."
-                )
-
-            if not isinstance(card["isCreatingCard"], bool):
-                raise ValueError(
-                    f"Card at index {index}: "
-                    "'isCreatingCard' must be a boolean."
-                )
-
-            if not card["isCreatingCard"]:
-                continue
-
             required_fields = [
                 "deck_name",
                 "note_type",
@@ -177,17 +164,26 @@ class AnkiAgentNode:
                         f"required property '{required_field}'."
                     )
 
-            if not isinstance(card["deck_name"], str) or not card["deck_name"].strip():
+            if (
+                not isinstance(card["deck_name"], str)
+                or not card["deck_name"].strip()
+            ):
                 raise ValueError(
                     f"Card at index {index}: invalid deck_name."
                 )
 
-            if not isinstance(card["note_type"], str) or not card["note_type"].strip():
+            if (
+                not isinstance(card["note_type"], str)
+                or not card["note_type"].strip()
+            ):
                 raise ValueError(
                     f"Card at index {index}: invalid note_type."
                 )
 
-            if not isinstance(card["fields"], dict) or not card["fields"]:
+            if (
+                not isinstance(card["fields"], dict)
+                or not card["fields"]
+            ):
                 raise ValueError(
                     f"Card at index {index}: fields must be "
                     "a non-empty object."
@@ -213,6 +209,7 @@ class AnkiAgentNode:
                     )
 
             for tag in card["tags"]:
+
                 if not isinstance(tag, str):
                     raise ValueError(
                         f"Card at index {index}: "
@@ -229,35 +226,27 @@ class AnkiAgentNode:
     ) -> Dict[str, Any]:
         """
         Collect initialized MCP clients from the graph state.
-
-        Anki is mandatory because this agent is responsible
-        for Anki operations.
-
-        Other MCP clients are optional.
         """
 
-        anki_client = state.get("anki_mcp_client")
+        clients = state.get("mcp_clients") or {}
+
+        if not isinstance(clients, dict):
+            raise TypeError(
+                "state['mcp_clients'] must be a dictionary."
+            )
+
+        anki_client = clients.get("anki")
 
         if anki_client is None:
             raise ValueError(
-                "anki_mcp_client is missing from state."
+                "Anki MCP client is missing from state['mcp_clients']."
             )
 
-        clients = {
-            "anki": anki_client,
+        return {
+            key: client
+            for key, client in clients.items()
+            if client is not None
         }
-
-        firecrawl_client = state.get("firecrawl_mcp_client")
-
-        if firecrawl_client is not None:
-            clients["firecrawl"] = firecrawl_client
-
-        nextcloud_client = state.get("nextcloud_mcp_client")
-
-        if nextcloud_client is not None:
-            clients["nextcloud"] = nextcloud_client
-
-        return clients
 
     @observe_node("anki_agent_node")
     async def __call__(
@@ -269,18 +258,22 @@ class AnkiAgentNode:
 
         Workflow:
 
-        1. Read graph messages.
+        1. Read the latest human message from graph state.
         2. Retrieve initialized MCP clients.
         3. Dynamically discover and generate MCP tools.
         4. Execute the agent with its available tools.
-        5. Return normal responses directly.
-        6. Parse and validate card JSON when present.
-        7. Execute card creation deterministically.
-        8. Return execution results and metadata.
+        5. Extract and validate the unified JSON output.
+        6. Return normal responses directly.
+        7. Validate cards when card creation is requested.
+        8. Execute card creation deterministically.
+        9. Return execution results and metadata.
         """
+
+        print("\n[ANKI_NODE] CALL START")
 
         try:
 
+            
             # --------------------------------------------------
             # 1. Read messages from graph state
             # --------------------------------------------------
@@ -317,6 +310,17 @@ class AnkiAgentNode:
 
             user_input = "\n".join(input_parts)
 
+
+            if not isinstance(user_input, str):
+                user_input = str(user_input)
+
+            user_input = user_input.strip()
+
+            if not user_input:
+                raise ValueError(
+                    "The latest human message is empty."
+                )
+
             # --------------------------------------------------
             # 2. Retrieve MCP clients
             # --------------------------------------------------
@@ -328,37 +332,45 @@ class AnkiAgentNode:
             anki_mcp_client = clients["anki"]
 
             # --------------------------------------------------
-            # 3. Dynamically discover MCP tools
-            # --------------------------------------------------
-
-            tools = await self.tool_factory.create_tools(
-                clients
-            )
-
-            # --------------------------------------------------
-            # 4. Execute agent with dynamic tools
+            # 3. Execute agent with dynamically discovered MCP tools
             # --------------------------------------------------
 
             result = await self.agent.run(
                 user_input=user_input,
-                tools=tools,
+                clients=clients,
             )
+
+            print("[ANKI_NODE] AGENT RETURNED")
 
             content = self._extract_content(
                 result
             )
 
             # --------------------------------------------------
-            # 5. Determine whether this is a card creation task
+            # 4. Extract and validate unified agent output
             # --------------------------------------------------
 
-            cards = self._extract_json_array(
+            agent_output = self._extract_agent_output(
                 content
             )
 
-            # Normal agent response:
-            # No card creation is performed.
-            if cards is None:
+            response = agent_output["response"]
+
+            is_card_creation = agent_output["isCardCreation"]
+
+            cards = agent_output["cards"]
+
+            # --------------------------------------------------
+            # 5. Handle normal agent responses
+            # --------------------------------------------------
+
+            # No card creation is performed when
+            # isCardCreation is False.
+            #
+            # The actual result of the user's request is
+            # returned directly from the response property.
+
+            if not is_card_creation:
 
                 metadata = dict(
                     state.get("metadata") or {}
@@ -371,7 +383,7 @@ class AnkiAgentNode:
                 return {
                     "messages": [
                         AIMessage(
-                            content=content
+                            content=response
                         )
                     ],
                     "metadata": metadata,
@@ -408,13 +420,15 @@ class AnkiAgentNode:
 
                 try:
 
-                    # The special planning flag is not part
-                    # of the actual Anki create_card arguments.
-                    tool_arguments = {
-                        key: value
-                        for key, value in card_data.items()
-                        if key != "isCreatingCard"
-                    }
+                    # The card object contains only the
+                    # actual arguments required by create_card.
+                    #
+                    # No additional planning flag needs to
+                    # be removed.
+
+                    tool_arguments = dict(
+                        card_data
+                    )
 
                     await anki_mcp_client.call_tool(
                         "create_card",
@@ -466,6 +480,7 @@ class AnkiAgentNode:
             )
 
             summary = (
+                f"{response}\n\n"
                 "Anki card creation completed.\n\n"
                 f"Generated cards: {len(cards)}\n"
                 f"Cards selected for creation: {cards_selected}\n"

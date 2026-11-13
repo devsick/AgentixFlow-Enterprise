@@ -5,7 +5,6 @@ from src.shared.node_wrapper import observe_node
 # Global allowlist: maximum permissions for all agents.
 BASELINE_TOOLS = [
     "collectives_get_collectives",
-    "collectives_get_collectives",
     "collectives_get_pages",
     "collectives_get_page",
     "collectives_search_pages",
@@ -40,4 +39,4 @@ async def nextcloud_mcp_initializer_node(state: Any) -> Dict[str, Any]:
         )
         raise
 
-    return {"nextcloud_mcp_client": client}
+    return {"mcp_clients": {"nextcloud": client}}

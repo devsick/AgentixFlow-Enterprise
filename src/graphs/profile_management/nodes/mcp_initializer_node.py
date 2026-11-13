@@ -45,4 +45,4 @@ async def initialize_mcp_node(state: Any) -> Dict[str, Any]:
         )
         raise
 
-    return {"mcp_client": client}
+    return {"mcp_clients": {"nextcloud": client}}

@@ -1,44 +1,126 @@
-from typing import Any
-from src.graphs.profile_maintenance.state import ProfileMaintenanceState
-from src.graphs.profile_maintenance.agents.profile_maintenance_agent import ProfileMaintenanceAgent
-from src.shared.node_wrapper import observe_node
 
-class ProfleMaintenanceNode:
+from typing import Any
+
+from src.graphs.profile_maintenance.state import ProfileMaintenanceState
+from src.graphs.profile_maintenance.agents.profile_maintenance_agent import (
+    ProfileMaintenanceAgent,
+)
+from src.shared.node_wrapper import observe_node
+from src.tools.mcp_tool_factory import MCPToolFactory
+
+
+class ProfileMaintenanceNode:
     stream_mode = "live"
+
     def __init__(self):
-        self.agent = ProfileMaintenanceAgent()
+        self.agent = ProfileMaintenanceAgent(
+            tool_factory=MCPToolFactory()
+        )
 
     @observe_node("profile_maintenance_agent_node")
-    async def __call__(self, state: ProfileMaintenanceState) -> dict[str, Any]:
+    async def __call__(
+        self,
+        state: ProfileMaintenanceState,
+    ) -> dict[str, Any]:
         """
-        Der Node verarbeitet den State, lädt den System-Prompt und 
-        ruft den Agenten auf.
+        Execute the profile maintenance agent.
+
+        Workflow:
+        1. Read messages from the graph state.
+        2. Retrieve initialized MCP clients.
+        3. Pass messages and clients to the agent.
+        4. The agent dynamically creates and executes MCP tools.
+        5. Extract response metadata.
+        6. Return the assistant message and updated metadata.
         """
-        # 1. System Prompt aus der Markdown-Datei laden (idealerweise gecached)
-        try:
-            with open("/src/graphs/profle_maintenance/agents/profile_maintenance_systemprompt.md", "r", encoding="utf-8") as f:
-                system_prompt = f.read()
-        except FileNotFoundError:
-            system_prompt = """You are a helpful assistant."""
 
-        await self.agent.set_system_prompt(system_prompt)
+        # --------------------------------------------------
+        # 1. Read messages from graph state
+        # --------------------------------------------------
 
-        # 2. Agenten aufrufen
-        # Wir geben den State zurück, wobei die neue Nachricht und die Metadaten 
-        # (aus der Antwort des Agenten) hinzugefügt werden.
-        response = await self.agent.run(state["messages"])
-        
-        # 3. Metadaten extrahieren (Tokens, Reasoning etc.)
-        # LangChain fügt diese in response.additional_kwargs oder response.response_metadata ein
-        metadata = {
-            "token_usage": getattr(response, "response_metadata", {}).get("token_usage"),
-            "model_name": getattr(response, "response_metadata", {}).get("model_name"),
-            # Falls das Modell Thinking/Reasoning via additional_kwargs sendet
-            "reasoning_content": response.additional_kwargs.get("reasoning_content") if hasattr(response, "additional_kwargs") else None,
-            "tool_calls": response.tool_calls if hasattr(response, 'tool_calls') else []
-        }
+        messages = state.get("messages", [])
+
+        if not messages:
+            raise ValueError(
+                "No messages found in state to process."
+            )
+
+        # --------------------------------------------------
+        # 2. Retrieve MCP clients
+        # --------------------------------------------------
+
+        clients = state.get("mcp_clients") or {}
+
+        if not isinstance(clients, dict):
+            raise TypeError(
+                "state['mcp_clients'] must be a dictionary."
+            )
+
+        if not clients:
+            raise ValueError(
+                "No MCP clients found in state['mcp_clients']."
+            )
+
+        # --------------------------------------------------
+        # 3. Execute profile maintenance agent
+        # --------------------------------------------------
+
+        # The agent itself creates the dynamic tools using
+        # MCPToolFactory and executes the tool-calling loop.
+        response = await self.agent.run(
+            messages,
+            clients,
+        )
+
+        # --------------------------------------------------
+        # 4. Extract response and token usage
+        # --------------------------------------------------
+
+        message, usage = response
+
+        # --------------------------------------------------
+        # 5. Collect metadata
+        # --------------------------------------------------
+
+        metadata = dict(
+            state.get("metadata") or {}
+        )
+
+        response_metadata = (
+            getattr(message, "response_metadata", {}) or {}
+        )
+
+        additional_kwargs = (
+            getattr(message, "additional_kwargs", {}) or {}
+        )
+
+        metadata.update(
+            {
+                "token_usage": usage,
+                "model_name": response_metadata.get(
+                    "model_name"
+                ),
+                "reasoning_content": additional_kwargs.get(
+                    "reasoning_content"
+                ),
+                "tool_calls": getattr(
+                    message,
+                    "tool_calls",
+                    [],
+                ),
+            }
+        )
+
+        # --------------------------------------------------
+        # 6. Return graph state update
+        # --------------------------------------------------
 
         return {
-            "messages": [response],
-            "metadata": metadata
+            "messages": [message],
+            "metadata": metadata,
         }
+
+
+# Backward compatibility for existing imports that still
+# use the previous misspelled class name.
+ProfleMaintenanceNode = ProfileMaintenanceNode

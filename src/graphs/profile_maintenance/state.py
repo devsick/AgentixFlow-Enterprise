@@ -6,6 +6,11 @@ def sum_reducer(old: int, new: int) -> int:
     """Reducer function to sum up tokens."""
     return old + new
 
+
+def merge_dicts(old: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
+    return {**old, **new}
+
+
 class ProfileMaintenanceState(TypedDict):
     """
     State für den Pure-Chat Graph.
@@ -21,4 +26,4 @@ class ProfileMaintenanceState(TypedDict):
     collective_name: Optional[str]
 
     # MCP Integration
-    mcp_client: Any # Holds the NextcloudMCPClient instance
+    mcp_clients: Annotated[Dict[str, Any], merge_dicts]

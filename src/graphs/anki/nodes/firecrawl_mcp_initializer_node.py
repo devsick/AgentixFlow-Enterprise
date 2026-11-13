@@ -30,4 +30,4 @@ async def firecrawl_mcp_initializer_node(state: Any) -> Dict[str, Any]:
         )
         raise
 
-    return {"firecrawl_mcp_client": client}
+    return {"mcp_clients": {"firecrawl": client}}

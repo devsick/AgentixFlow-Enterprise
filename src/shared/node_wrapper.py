@@ -1,82 +1,141 @@
+
 import functools
 import time
 import traceback
-from typing import Any, Callable, Coroutine
+from collections.abc import Mapping
+from typing import Any, Callable, Coroutine, Optional
+
 from src.shared.monitoring_writer import monitoring_writer
 
-def observe_node(node_name: str):
+
+def observe_node(node_name_or_func: Optional[Any] = None):
     """
-    A decorator for LangGraph nodes that automatically captures the lifecycle (Start, End, Error)
-    and writes it to the State and the filesystem.
+    Decorator for LangGraph nodes.
+
+    Supports:
+
+        @observe_node
+        async def my_node(state):
+            ...
+
+        @observe_node("my_node")
+        async def my_node(state):
+            ...
+
+        @observe_node
+        async def __call__(self, state):
+            ...
     """
+
     def decorator(func: Callable[..., Coroutine[Any, Any, Any]]):
+
+        resolved_node_name = (
+            node_name_or_func
+            if isinstance(node_name_or_func, str)
+            else func.__name__
+        )
+
         @functools.wraps(func)
-        async def wrapper(self, state: Any, *args, **kwargs) -> Any:
+        async def wrapper(*args, **kwargs):
+
+            # Detect function-based nodes and class-based nodes.
+            if args and isinstance(args[0], Mapping):
+                state = args[0]
+
+            elif len(args) >= 2 and isinstance(args[1], Mapping):
+                state = args[1]
+
+            else:
+                raise TypeError(
+                    f"Node '{resolved_node_name}' received no valid "
+                    f"LangGraph state. Arguments: {args}"
+                )
+
             graph_id = state.get("graph_id", "unknown_graph")
             run_id = state.get("run_id", "unknown_run")
 
-            # 1. Node Start
+            # Ensure metadata exists.
+            metadata = dict(state.get("metadata") or {})
+            metadata["current_node"] = resolved_node_name
+            metadata["node_status"] = "running"
+
             start_time = time.perf_counter()
+
             await monitoring_writer.log_event(
-                graph_id, 
-                run_id, 
-                "node_started", 
-                {"node": node_name, "timestamp": time.time()}
+                graph_id,
+                run_id,
+                "node_started",
+                {
+                    "node": resolved_node_name,
+                    "timestamp": time.time(),
+                },
             )
-            
-            # Update State (for API/Streaming)
-            if "metadata" not in state:
-                state["metadata"] = {}
-            state["metadata"]["current_node"] = node_name
-            state["metadata"]["node_status"] = "running"
 
             try:
-                # 2. Node execution
-                result = await func(self, state, *args, **kwargs)
+                # Execute the original function with its original arguments.
+                result = await func(*args, **kwargs)
 
-                # 3. Node End (Success)
-                duration_ms = (time.perf_counter() - start_time) * 1000
+                duration_ms = (
+                    time.perf_counter() - start_time
+                ) * 1000
+
                 await monitoring_writer.log_event(
-                    graph_id, 
-                    run_id, 
-                    "node_finished", 
-                    {"node": node_name, "duration_ms": duration_ms}
+                    graph_id,
+                    run_id,
+                    "node_finished",
+                    {
+                        "node": resolved_node_name,
+                        "duration_ms": duration_ms,
+                    },
                 )
-                
-                # Update State
-                state["metadata"]["node_status"] = "completed"
-                state["metadata"]["last_node_duration_ms"] = duration_ms
 
-                # If the node returns a dictionary, it has to be merged into the state
-                if isinstance(result, dict):
-                    # Returning the result, the Graph/Langgraph does the merging
-                    return result
-                return result
+                if not isinstance(result, dict):
+                    raise TypeError(
+                        f"Node '{resolved_node_name}' returned "
+                        f"{type(result).__name__} instead of dict."
+                    )
+
+                result_metadata = result.get("metadata") or {}
+
+                updated_metadata = {
+                    **metadata,
+                    **result_metadata,
+                    "current_node": resolved_node_name,
+                    "node_status": "completed",
+                    "last_node_duration_ms": duration_ms,
+                }
+
+                return {
+                    **result,
+                    "metadata": updated_metadata,
+                }
 
             except Exception as e:
-                # 4. Node Fehler (Failure)
-                duration_ms = (time.perf_counter() - start_time) * 1000
+
+                duration_ms = (
+                    time.perf_counter() - start_time
+                ) * 1000
+
                 error_details = {
-                    "node": node_name,
+                    "node": resolved_node_name,
                     "error_type": type(e).__name__,
                     "error_message": str(e),
                     "traceback": traceback.format_exc(),
-                    "duration_ms": duration_ms
+                    "duration_ms": duration_ms,
                 }
-                
+
                 await monitoring_writer.log_event(
-                    graph_id, 
-                    run_id, 
-                    "node_failed", 
-                    error_details
+                    graph_id,
+                    run_id,
+                    "node_failed",
+                    error_details,
                 )
 
-                # Update State for API/Streaming
-                state["metadata"]["node_status"] = "failed"
-                state["metadata"]["last_error"] = error_details
-
-                # Raising the error, so the graph can handle the Routing correctly
-                raise e
+                raise
 
         return wrapper
+
+    if callable(node_name_or_func):
+        return decorator(node_name_or_func)
+
     return decorator

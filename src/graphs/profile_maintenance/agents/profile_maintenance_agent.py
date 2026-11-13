@@ -3,25 +3,11 @@ import json
 import re
 from pathlib import Path
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, SystemMessage, BaseMessage
+from langchain_core.messages import HumanMessage, SystemMessage, BaseMessage, AIMessage, ToolMessage
 from pydantic import BaseModel, Field
 from src.settings.config_store import config_store
 from src.shared.reasoning_chat_openai import ReasoningChatOpenAI
-
-ALLOWED_TOOLS = [
-    "collectives_get_collectives",
-    "collectives_get_pages",
-    "collectives_get_page",
-    "collectives_search_pages",
-    "collectives_create_page",
-    "nc_webdav_list_directory",
-    "nc_webdav_read_file",
-    "nc_webdav_write_file",
-    "nc_webdav_create_directory",
-    "nc_webdav_search_files",
-    "nc_webdav_find_by_name",
-]
-
+from src.tools.mcp_tool_factory import MCPToolFactory
 
 class ProfileMaintenanceAgent:
     """
@@ -30,12 +16,12 @@ class ProfileMaintenanceAgent:
 
     PROMPT_PATH = Path(__file__).with_name("profile_maintenance_systemprompt.md")
 
-    def __init__(self):
+    def __init__(self, tool_factory: MCPToolFactory):
+        self.tool_factory = tool_factory
         with self.PROMPT_PATH.open("r", encoding="utf-8") as file:
             self.system_prompt = file.read()
         
         self._init_llm()
-        self.tools = []
 
     def _init_llm(self):
         profile = config_store.llm_profiles.get("oogabooga")
@@ -55,26 +41,54 @@ class ProfileMaintenanceAgent:
             extra_body=profile.extra_body
         )
 
-    async def set_tools(self, tools: list):
-        """Setzt die Tools für den Agenten."""
-        self.tools = tools
-        self.llm = self.llm.bind_tools(tools)
-
-    async def run(self, messages: list) -> Tuple[BaseMessage, Dict[str, Any]]:
+    async def run(self, messages: list, clients: Dict[str, Any]) -> Tuple[BaseMessage, Dict[str, Any]]:
         """
-        Executes the agent logic on a list of messages.
+        Executes the agent logic on a list of messages with dynamic tools.
         Returns a tuple of (result_message, token_usage_dict).
         """
         try:
+            # 1. Discover tools from clients
+            tools = await self.tool_factory.create_tools(clients)
+            
+            # 2. Bind tools to the LLM
+            model = self.llm.bind_tools(tools)
+
             full_messages = []
             if self.system_prompt:
                 full_messages.append(SystemMessage(content=self.system_prompt))
             full_messages.extend(messages)
 
-            message = await self.llm.ainvoke(full_messages)
-            usage = message.response_metadata.get("token_usage", {})
+            # 3. Execute agent loop
+            response = await model.ainvoke(full_messages)
+            
+            tools_by_name = {tool.name: tool for tool in tools}
+            
+            tool_iterations = 0
+            while response.tool_calls and tool_iterations < 10:
+                tool_iterations += 1
+                tool_messages = []
+                for tool_call in response.tool_calls:
+                    tool_name = tool_call["name"]
+                    tool_args = tool_call["args"]
+                    tool_call_id = tool_call["id"]
+                    
+                    tool = tools_by_name.get(tool_name)
+                    if tool:
+                        try:
+                            result = await tool.ainvoke(tool_args)
+                            tool_messages.append(ToolMessage(content=str(result), tool_call_id=tool_call_id))
+                        except Exception as e:
+                            tool_messages.append(ToolMessage(content=f"Error: {str(e)}", tool_call_id=tool_call_id))
+                    else:
+                        tool_messages.append(ToolMessage(content=f"Tool {tool_name} not found.", tool_call_id=tool_call_id))
+                
+                full_messages.append(response)
+                full_messages.extend(tool_messages)
+                response = await model.ainvoke(full_messages)
 
-            return message, usage
+            usage = response.response_metadata.get("token_usage", {})
+
+            return response, usage
 
         except Exception as e:
             raise e

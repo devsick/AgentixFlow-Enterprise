@@ -6,6 +6,9 @@ def sum_reducer(old: int, new: int) -> int:
     """Reducer function to sum up tokens."""
     return old + new
 
+def merge_dicts(old: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
+    return {**old, **new}
+
 class ProfileManagementState(TypedDict):
     """
     Shared State for Profile Management Graph.
@@ -50,5 +53,5 @@ class ProfileManagementState(TypedDict):
     profile: Dict[str, Any] # The final aggregated profile object
 
     # MCP Integration
-    mcp_client: Any # Holds the NextcloudMCPClient instance
+    mcp_clients: Annotated[Dict[str, Any], merge_dicts]
 
